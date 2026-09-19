@@ -4,7 +4,7 @@ FE 5108 Midterm Project — fallback data downloader.
 Run ONCE on a machine with open internet (instructor or student):
 
     pip install yfinance pandas-datareader
-    python download_data.py
+    python scripts/download_data.py
 
 Produces, in ./data/ :
     prices_us_monthly.csv   30 liquid US names (21 mega-caps + 9 SPDR sector ETFs)
@@ -23,17 +23,18 @@ Design notes
   proxy — say so in the report.
 * The SG list is "approximately the STI": index membership changes, so verify
   against the current STI constituents and adjust TICKERS_SG before relying
-  on it for Stage 1's value-weight comparison.
+  the value-weight comparison.
 """
 
 from __future__ import annotations
+
 import time
 from pathlib import Path
 
 import pandas as pd
 
 START, END = "2016-09-01", "2026-09-01"   # 10 years, monthly
-OUT = Path(__file__).parent / "data"
+OUT = Path(__file__).resolve().parents[1] / "data"   # scripts/ -> repo root/data
 OUT.mkdir(exist_ok=True)
 
 TICKERS_US = [

@@ -1,39 +1,97 @@
-# FE 5108 Midterm Project — Fallback Data Bundle
+# FE 5108 Midterm Project
 
-This folder is the safety net promised in the handout's *Data and tools*
-section: if Yahoo rate-limits your group, you can start (and finish) Stage 1
-from here instead of stalling.
+**From the Mutual-Fund Theorem to the Security Market Line: does the theory survive real data?**
 
-## Contents
+A reproducible research pipeline for the midterm, organized by analysis:
+mean–variance portfolio choice and estimation error, the CAPM and the empirical
+security market line, factor models, and the investment-committee memo. The
+portfolio-choice analysis is implemented and tested; the remaining analyses
+slot into `src/goldman/exhibits/` alongside it.
+
+## Project layout
+
+```
+.
+├── run_all.py                  # one entry point: reproduces every exhibit
+├── pyproject.toml              # installable package, deps, ruff/pytest config
+├── src/goldman/                # the package (src layout)
+│   ├── config.py               # paths, RF default, universe registry
+│   ├── data.py                 # price/return/factor loaders and cleaning
+│   ├── portfolio.py            # tangency weights, 1/N, subsample re-estimation
+│   ├── cli.py                  # `goldman` command-line interface
+│   └── exhibits/
+│       └── portfolio_choice.py # summary stats, weight chart, subsample drift
+├── scripts/download_data.py    # one-shot network downloader (Yahoo/Stooq/FF3)
+├── notebooks/portfolio_analysis.ipynb   # thin wrapper over the package
+├── tests/                      # pytest suite for the math and loaders
+├── data/                       # raw cached CSVs (committed)
+└── outputs/                    # generated exhibits (git-ignored)
+```
+
+## Quickstart
+
+```bash
+uv sync                     # create the env and install goldman (editable)
+uv run run_all.py           # default: US universe, all implemented analyses
+uv run pytest               # 12 tests
+uv run ruff check .
+```
+
+Other entry points:
+
+```bash
+# CLI (installed console script)
+uv run goldman portfolios --universe sg --use-ff3-rf --min-obs 60
+uv run python -m goldman portfolios --universe synthetic
+
+# Value weights as the comparison in the weight chart (two-column asset,weight CSV)
+uv run goldman portfolios --universe us --value-weights value_weights.csv
+
+# Download the raw data; needs the optional `data` extra and open internet
+uv sync --extra data
+uv run python scripts/download_data.py
+```
+
+`goldman` resolves the repo root from the installed package, so `data/` and
+`outputs/` land in the checkout even when invoked from elsewhere. Override with
+the `GOLDMAN_ROOT` environment variable if needed.
+
+## Analyses
+
+| Module | What it computes | Outputs |
+|---|---|---|
+| `exhibits/portfolio_choice.py` | Annualised summary statistics; the tangency portfolio `w ∝ Σ⁻¹μ_e`; comparison (value/1/N) weights; full- vs subsample re-estimation | `summary_stats.csv`, `tangency_weights.png`, `subsample_weights.csv` |
+
+Adding an analysis means adding a module here plus a matching subcommand in
+`cli.py`; `run_all.py` then reproduces it with the rest.
+
+## Data
 
 | File | What it is |
 |---|---|
-| `download_data.py` | One-shot downloader: 30 US names (21 mega-caps + 9 SPDR sector ETFs), ~30 large SGX names, and the Fama–French 3 factors + RF. Run it **once** on an open network; it writes clean monthly CSVs into `data/` plus a `coverage_report.txt`. Falls back to Stooq per ticker if Yahoo throttles. |
-| `starter_stage1.py` / `starter_stage1.ipynb` | Stage 1 skeleton (same code, script and notebook). Reads a price CSV, produces exhibits 1a/1b/1c. Needs only numpy, pandas, matplotlib — no internet. |
-| `data/sample_synthetic_prices.csv` | **Fake** data (30 assets × 120 months, labelled SYN01–SYN30) so the starter runs before you have real data. Do not use it in your report. |
+| `data/prices_us_monthly.csv` | 30 US names (21 mega-caps + 9 SPDR sector ETFs) |
+| `data/prices_sg_monthly.csv` | ~30 large SGX names (approximately the STI) |
+| `data/ff3_monthly.csv` | Fama–French 3 factors + RF, decimals, monthly |
+| `data/sample_synthetic_prices.csv` | **Fake** data for smoke-testing; not for the report |
+| `data/coverage_report.txt` | What the downloader fetched |
 
-## For the instructor (before posting to Canvas)
+Cleaning decisions (sparse-ticker drops, fully-observed months) are made once,
+in `src/goldman/data.py`.
 
-1. `pip install yfinance pandas-datareader`
-2. `python download_data.py` — takes a minute; read `coverage_report.txt`.
-3. Post the whole folder (now including the real CSVs in `data/`) to Canvas.
-
-## Notes and honest caveats
+### Honest caveats
 
 - Prices are Yahoo **adjusted closes** (splits + dividends) — a total-return
-  proxy. Say so in your report.
-- The SG list is *approximately* the STI. Index membership changes; verify
-  against the current constituents before using value weights.
+  proxy. Say so in the report.
+- The SG list is *approximately* the STI; verify current constituents before
+  using value weights.
 - Both universes are **today's members backfilled ten years** — the
-  survivorship bias the handout tells you to acknowledge and discuss.
-- The starter compares tangency weights with **1/N**; the handout asks for
-  **value weights** — get market caps and swap them in.
-- Sector ETFs XLRE and XLC are excluded on purpose (listed 2015/2018 — not
-  enough history for the 96-month minimum).
+  survivorship bias the handout asks you to acknowledge and discuss.
+- The weight chart compares tangency weights against **1/N** by default; the
+  handout asks for **value weights**. Supply market caps via the two-column CSV
+  and pass `--value-weights` (or a `Series` to `run_portfolio_analysis`).
 
-## What the starter will show you (yes, it's supposed to look like that)
+## Reproducibility
 
-On the synthetic sample it already produces a −73% short position in the
-tangency portfolio and a correlation of **0.16** between weight vectors
-estimated on the two halves of the sample. That is estimation error, the
-central character of Stage 1 — report it, don't "fix" it.
+`run_all.py` regenerates every exhibit from the committed raw CSVs in one
+command. Generated exhibits go to `outputs/` (git-ignored). Package versions
+are pinned in `pyproject.toml` / `uv.lock`.
