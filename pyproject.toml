@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# One-shot network downloader (scripts/download_data.py). Not needed to run.
+# Explicit, network-only fetchers (goldman.data.fetch). Not needed to run.
 data = [
     "pandas-datareader>=0.10",
     "yfinance>=0.2.40",
@@ -21,9 +21,6 @@ notebook = [
     "ipykernel>=6.29",
     "jupyterlab>=4.0",
 ]
-
-[project.scripts]
-goldman = "goldman.cli:main"
 
 [build-system]
 requires = ["hatchling"]
