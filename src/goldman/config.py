@@ -35,8 +35,8 @@ PROJECT_ROOT: Path = _resolve_project_root()
 DATA_DIR: Path = PROJECT_ROOT / "data"
 OUTPUTS_DIR: Path = PROJECT_ROOT / "outputs"
 
-# Raw per-ticker cache written by goldman.data.fetch before any conversion:
-# data/raw/market_caps/<universe>/<ticker>.csv
+# Raw per-ticker fetch cache written by goldman.data.fetch before any
+# conversion: data/raw/<universe>/<ticker>.csv
 RAW_DIR: Path = DATA_DIR / "raw"
 
 # ------------------------------------------------------------------ defaults
@@ -84,9 +84,9 @@ def value_weights_path(universe: str) -> Path | None:
     return data_path(filename) if filename else None
 
 
-def raw_market_caps_dir(universe: str) -> Path:
-    """Return the raw per-ticker market-cap cache directory for a universe."""
-    return RAW_DIR / "market_caps" / universe
+def raw_universe_dir(universe: str) -> Path:
+    """Return the raw per-ticker fetch cache directory for a universe."""
+    return RAW_DIR / universe
 
 
 def ensure_outputs_dir(output_dir: Path | None = None) -> Path:

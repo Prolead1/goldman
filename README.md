@@ -28,7 +28,7 @@ slot into `src/goldman/analysis/` alongside it.
 ├── notebooks/portfolio_analysis.ipynb   # thin wrapper over the package
 ├── tests/                      # pytest suite for the math and loaders
 ├── data/                       # raw cached CSVs (committed)
-│   └── raw/market_caps/        # per-ticker prices + shares cache
+│   └── raw/<universe>/        # per-ticker prices + shares cache
 └── outputs/                    # generated exhibits (git-ignored)
 ```
 
@@ -63,7 +63,7 @@ uv run python -m goldman.data.fetch all          # everything
 ```
 
 Market caps run in two stages so the network is hit once per ticker: `caps-fetch`
-pulls prices + shares outstanding into `data/raw/market_caps/<universe>/`, and
+pulls prices + shares outstanding into `data/raw/<universe>/`, and
 `caps-build` (offline, repeatable) turns that cache into `data/value_weights_*.csv`.
 `--refresh` re-pulls; `--universe us` limits a stage to one universe.
 
@@ -87,7 +87,7 @@ Adding an analysis means adding a module here plus a matching subcommand in
 | `data/prices_us_monthly.csv` | 30 US names (21 mega-caps + 9 SPDR sector ETFs) |
 | `data/prices_sg_monthly.csv` | ~30 large SGX names (approximately the STI) |
 | `data/ff3_monthly.csv` | Fama–French 3 factors + RF, decimals, monthly |
-| `data/raw/market_caps/<universe>/<ticker>.csv` | Raw per-ticker `close`, `adj_close`, `shares` cache |
+| `data/raw/<universe>/<ticker>.csv` | Raw per-ticker `close`, `adj_close`, `shares` cache |
 | `data/value_weights_us.csv` | US point-in-time market cap -> monthly value weights |
 | `data/value_weights_sg.csv` | SG point-in-time market cap -> monthly value weights |
 | `data/sample_synthetic_prices.csv` | **Fake** data for smoke-testing; not for the report |

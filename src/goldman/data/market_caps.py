@@ -7,7 +7,7 @@ look-ahead bias, unlike a single "today's market cap" snapshot applied to a
 ten-year panel.
 
 The fetch step writes a raw per-ticker cache
-(``data/raw/market_caps/<universe>/<ticker>.csv``) that holds everything pulled
+(``data/raw/<universe>/<ticker>.csv``) that holds everything pulled
 from the network in one pass; :func:`build_value_weights_from_raw` converts that
 cache into a long-format ``asset, date, market_cap, weight`` CSV and
 :func:`load_value_weights` turns it into a date-by-asset weight panel aligned to
@@ -130,7 +130,7 @@ def build_value_weights_from_raw(
     weight``; the weight column is normalised within each date.  Tickers whose
     raw file is absent or has no usable cap are omitted.
     """
-    raw_dir = config.raw_market_caps_dir(universe)
+    raw_dir = config.raw_universe_dir(universe)
     if not raw_dir.is_dir():
         raise FileNotFoundError(
             f"No raw market-cap cache at {raw_dir}; run "

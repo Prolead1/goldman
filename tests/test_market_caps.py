@@ -107,7 +107,7 @@ def test_load_value_weights_dated_panel_missing_asset_raises(tmp_path):
 
 def test_build_value_weights_from_raw(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "RAW_DIR", tmp_path)
-    raw_dir = tmp_path / "market_caps" / "us"
+    raw_dir = tmp_path / "us"
     raw_dir.mkdir(parents=True)
     index = pd.to_datetime(["2020-01-01", "2020-02-01"])
     pd.DataFrame({"close": [10.0, 20.0], "shares": [100.0, 100.0]}, index=index).to_csv(

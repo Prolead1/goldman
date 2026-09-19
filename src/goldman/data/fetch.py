@@ -23,7 +23,7 @@ Design notes
 * Prices: ONE batch call per universe, then cached; a per-ticker Stooq fallback
   covers names Yahoo misses (Yahoo rate-limits repeated pulls).
 * Market caps: one pass per ticker (prices + shares together) into a raw cache
-  under ``data/raw/market_caps/<universe>/``; ``caps-build`` is offline and
+  under ``data/raw/<universe>/``; ``caps-build`` is offline and
   repeatable.  ``--refresh`` re-pulls, ``--pace`` controls politeness.
 * Prices are Yahoo's adjusted close (splits + dividends) — a total-return proxy.
 * The SG list is "approximately the STI": verify current membership before
@@ -205,7 +205,7 @@ def fetch_cap_universe(name: str, filename: str, *, pace: float, refresh: bool) 
         return
 
     prices = read_prices(path)
-    raw_dir = config.raw_market_caps_dir(name)
+    raw_dir = config.raw_universe_dir(name)
     raw_dir.mkdir(parents=True, exist_ok=True)
 
     start = prices.index.min() - pd.Timedelta(days=400)
