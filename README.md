@@ -1,4 +1,4 @@
-# FE 5108 Project
+# goldman - FE5108 project
 
 **From the Mutual-Fund Theorem to the Security Market Line: does the theory survive real data?**
 
