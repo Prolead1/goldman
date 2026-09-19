@@ -12,7 +12,6 @@ slot into `src/goldman/analysis/` alongside it.
 
 ```
 .
-├── run_all.py                  # one entry point: reproduces every exhibit
 ├── pyproject.toml              # installable package, deps, ruff/pytest config
 ├── src/goldman/                # the package (src layout)
 │   ├── config.py               # shared paths, RF default, universe registry
@@ -24,8 +23,8 @@ slot into `src/goldman/analysis/` alongside it.
 │   ├── analysis/               # portfolio construction and exhibits
 │   │   ├── portfolio.py        # tangency weights, 1/N, subsample re-estimation
 │   │   └── portfolio_choice.py # summary stats, weight chart, subsample drift
-│   └── cli.py                  # `goldman` command-line interface
-├── notebooks/portfolio_analysis.ipynb   # thin wrapper over the package
+│   └── __init__.py             # public API
+├── notebooks/portfolio_analysis.ipynb   # single entry point: Stage 1 end to end
 ├── tests/                      # pytest suite for the math and loaders
 ├── data/                       # raw cached CSVs (committed)
 │   └── raw/<universe>/        # per-ticker prices + shares cache
@@ -35,27 +34,21 @@ slot into `src/goldman/analysis/` alongside it.
 ## Quickstart
 
 ```bash
-uv sync                     # create the env and install goldman (editable)
-uv run run_all.py           # default: US universe, all implemented analyses
+uv sync --extra notebook    # env + Jupyter
+uv run jupyter lab notebooks/portfolio_analysis.ipynb   # run all cells
 uv run pytest               # 24 tests
 uv run ruff check .
 ```
 
-Other entry points:
+The notebook is the single reproducible entry point: it drives the package,
+prints every Stage 1 exhibit and writes them to `outputs/`. Swap `UNIVERSE` at
+the top to `"sg"`, and pass `comparison=None` to `tangency_vs_comparison` /
+`run_portfolio_analysis` for the 1/N comparison instead of value weights.
+
+Network fetchers need the optional `data` extra and open internet; they run
+only when invoked — nothing imports them:
 
 ```bash
-# CLI (installed console script)
-uv run goldman portfolios --universe sg --use-ff3-rf --min-obs 60
-uv run python -m goldman portfolios --universe synthetic
-
-# Force the 1/N comparison instead of the default value weights
-uv run goldman portfolios --universe us --equal-weights
-
-# Override value weights with your own CSV (asset, weight|market_cap)
-uv run goldman portfolios --universe us --value-weights my_weights.csv
-
-# Network fetchers; need the optional `data` extra and open internet.
-# goldman.data.fetch runs only when invoked — nothing imports it.
 uv sync --extra data
 uv run python -m goldman.data.fetch prices       # prices + FF3 factors
 uv run python -m goldman.data.fetch caps         # fetch + build value weights
@@ -75,10 +68,11 @@ the `GOLDMAN_ROOT` environment variable if needed.
 
 | Module | What it computes | Outputs |
 |---|---|---|
-| `analysis/portfolio_choice.py` | Annualised summary statistics; the tangency portfolio `w ∝ Σ⁻¹μ_e`; comparison (value/1/N) weights; full- vs subsample re-estimation | `summary_stats.csv`, `tangency_weights.png`, `subsample_weights.csv` |
+| `analysis/portfolio_choice.py` | Annualised summary statistics; the tangency portfolio `w ∝ Σ⁻¹μ_e`; comparison (value/1/N) weights; full- vs subsample re-estimation | `summary_stats.csv`, `tangency_weights.png`, `value_weights.csv`, `subsample_weights.csv` |
 
-Adding an analysis means adding a module here plus a matching subcommand in
-`cli.py`; `run_all.py` then reproduces it with the rest.
+Adding an analysis means adding a module under `src/goldman/analysis/` and a
+section in `notebooks/portfolio_analysis.ipynb`; the notebook reproduces every
+stage top to bottom.
 
 ## Data
 
@@ -113,11 +107,11 @@ in `src/goldman/data/`.
   names (META before 2022-07; a few SG listings), so those months carry the
   earliest known count back to the sample start — an approximation, but a
   point-in-time price times a plausible share count rather than today's cap.
-  The weight chart uses value weights by default and falls back to 1/N where no
-  weights exist (e.g. the synthetic sample); pass `--equal-weights` to force 1/N.
+  The weight chart uses value weights by default; set `comparison=None` in the
+  notebook to use the 1/N comparison instead.
 
 ## Reproducibility
 
-`run_all.py` regenerates every exhibit from the committed raw CSVs in one
-command. Generated exhibits go to `outputs/` (git-ignored). Package versions
-are pinned in `pyproject.toml` / `uv.lock`.
+`notebooks/portfolio_analysis.ipynb` regenerates every Stage 1 exhibit from the
+committed raw CSVs when run top to bottom. Generated exhibits go to `outputs/`
+(git-ignored). Package versions are pinned in `pyproject.toml` / `uv.lock`.

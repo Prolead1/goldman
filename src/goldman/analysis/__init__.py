@@ -15,12 +15,22 @@ from .portfolio import (
     tangency_weights,
     weight_correlation,
 )
-from .portfolio_choice import run_portfolio_analysis
+from .portfolio_choice import (
+    PortfolioAnalysisResult,
+    plot_weights,
+    run_portfolio_analysis,
+    summary_statistics,
+    tangency_vs_comparison,
+)
 
 __all__ = [
     "portfolio",
     "portfolio_choice",
+    "PortfolioAnalysisResult",
     "run_portfolio_analysis",
+    "summary_statistics",
+    "tangency_vs_comparison",
+    "plot_weights",
     "equal_weights",
     "excess_means",
     "normalize_weights",

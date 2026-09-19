@@ -1,7 +1,7 @@
 """Explicit, network-only fetchers — never imported by the analysis pipeline.
 
 Everything that touches the internet lives here and runs **only when invoked**;
-importing ``goldman.data`` (or running ``run_all.py`` / the CLI) never calls it.
+importing ``goldman.data`` (or running the notebook) never calls it.
 The optional ``data`` extra (yfinance, pandas-datareader) is imported lazily
 inside each function, so the rest of the package works without it.
 

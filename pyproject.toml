@@ -22,9 +22,6 @@ notebook = [
     "jupyterlab>=4.0",
 ]
 
-[project.scripts]
-goldman = "goldman.cli:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
