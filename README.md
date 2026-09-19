@@ -6,7 +6,7 @@ A reproducible research pipeline for the project, organized by analysis:
 mean–variance portfolio choice and estimation error, the CAPM and the empirical
 security market line, factor models, and the investment-committee memo. The
 portfolio-choice analysis is implemented and tested; the remaining analyses
-slot into `src/goldman/exhibits/` alongside it.
+slot into `src/goldman/analysis/` alongside it.
 
 ## Project layout
 
@@ -15,12 +15,14 @@ slot into `src/goldman/exhibits/` alongside it.
 ├── run_all.py                  # one entry point: reproduces every exhibit
 ├── pyproject.toml              # installable package, deps, ruff/pytest config
 ├── src/goldman/                # the package (src layout)
-│   ├── config.py               # paths, RF default, universe registry
-│   ├── data.py                 # price/return/factor loaders and cleaning
-│   ├── portfolio.py            # tangency weights, 1/N, subsample re-estimation
-│   ├── cli.py                  # `goldman` command-line interface
-│   └── exhibits/
-│       └── portfolio_choice.py # summary stats, weight chart, subsample drift
+│   ├── config.py               # shared paths, RF default, universe registry
+│   ├── data/                   # pre-cleaning phase
+│   │   ├── prices.py           # price loading, return panels, cleaning
+│   │   └── factors.py          # FF3 factors and the risk-free series
+│   ├── analysis/               # portfolio construction and exhibits
+│   │   ├── portfolio.py        # tangency weights, 1/N, subsample re-estimation
+│   │   └── portfolio_choice.py # summary stats, weight chart, subsample drift
+│   └── cli.py                  # `goldman` command-line interface
 ├── scripts/download_data.py    # one-shot network downloader (Yahoo/Stooq/FF3)
 ├── notebooks/portfolio_analysis.ipynb   # thin wrapper over the package
 ├── tests/                      # pytest suite for the math and loaders
@@ -60,7 +62,7 @@ the `GOLDMAN_ROOT` environment variable if needed.
 
 | Module | What it computes | Outputs |
 |---|---|---|
-| `exhibits/portfolio_choice.py` | Annualised summary statistics; the tangency portfolio `w ∝ Σ⁻¹μ_e`; comparison (value/1/N) weights; full- vs subsample re-estimation | `summary_stats.csv`, `tangency_weights.png`, `subsample_weights.csv` |
+| `analysis/portfolio_choice.py` | Annualised summary statistics; the tangency portfolio `w ∝ Σ⁻¹μ_e`; comparison (value/1/N) weights; full- vs subsample re-estimation | `summary_stats.csv`, `tangency_weights.png`, `subsample_weights.csv` |
 
 Adding an analysis means adding a module here plus a matching subcommand in
 `cli.py`; `run_all.py` then reproduces it with the rest.
@@ -76,7 +78,7 @@ Adding an analysis means adding a module here plus a matching subcommand in
 | `data/coverage_report.txt` | What the downloader fetched |
 
 Cleaning decisions (sparse-ticker drops, fully-observed months) are made once,
-in `src/goldman/data.py`.
+in `src/goldman/data/`.
 
 ### Honest caveats
 

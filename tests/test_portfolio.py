@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from goldman.portfolio import (
+from goldman.analysis.portfolio import (
     equal_weights,
     excess_means,
     normalize_weights,

@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 
 from goldman import config
+from goldman.analysis.portfolio_choice import run_portfolio_analysis, summary_statistics
 from goldman.data import load_ff3, load_returns, monthly_rf, prices_to_returns
-from goldman.exhibits.portfolio_choice import run_portfolio_analysis, summary_statistics
 
 SYNTHETIC = config.universe_path("synthetic")
 HAS_SYNTHETIC = Path(SYNTHETIC).exists()

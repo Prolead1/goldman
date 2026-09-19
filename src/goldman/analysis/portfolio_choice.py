@@ -20,7 +20,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from .. import config  # noqa: E402
-from ..portfolio import (  # noqa: E402
+from .portfolio import (  # noqa: E402
     equal_weights,
     excess_means,
     subsample_tangency,

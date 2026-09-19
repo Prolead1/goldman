@@ -21,8 +21,8 @@ from pathlib import Path
 import pandas as pd
 
 from . import config
+from .analysis import portfolio_choice
 from .data import load_ff3, load_returns, monthly_rf
-from .exhibits import portfolio_choice
 
 __all__ = ["main"]
 

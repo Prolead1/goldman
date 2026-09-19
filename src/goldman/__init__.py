@@ -1,27 +1,27 @@
 """FE 5108 Project — portfolio analytics package.
 
-Public surface intentionally small: configuration, data loaders, portfolio
-math, and the exhibit builders.
+Two subpackages carry the work: :mod:`goldman.data` (the pre-cleaning phase)
+and :mod:`goldman.analysis` (portfolio construction and the exhibits).
 """
 
 from __future__ import annotations
 
-from . import config, data, portfolio
-from .data import load_ff3, load_returns, monthly_rf
-from .portfolio import (
+from . import analysis, config, data
+from .analysis.portfolio import (
     equal_weights,
     excess_means,
     subsample_tangency,
     tangency_weights,
 )
+from .data import load_ff3, load_returns, monthly_rf
 
 __version__ = "0.1.0"
 
 __all__ = [
     "__version__",
+    "analysis",
     "config",
     "data",
-    "portfolio",
     "load_ff3",
     "load_returns",
     "monthly_rf",

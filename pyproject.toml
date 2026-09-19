@@ -51,4 +51,4 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/goldman/exhibits/*.py" = ["E402"]  # matplotlib.use before pyplot
+"src/goldman/analysis/*.py" = ["E402"]  # matplotlib.use before pyplot
