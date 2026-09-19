@@ -31,6 +31,7 @@ from .portfolio import (  # noqa: E402
 __all__ = [
     "PortfolioAnalysisResult",
     "summary_statistics",
+    "representative_weights",
     "tangency_vs_comparison",
     "plot_weights",
     "run_portfolio_analysis",
@@ -72,20 +73,44 @@ def summary_statistics(
     return stats.round(3)
 
 
+def representative_weights(
+    weights: pd.Series | pd.DataFrame,
+    how: str = "mean",
+) -> pd.Series:
+    """Collapse a date-by-asset weight panel to one vector for charting.
+
+    A ``Series`` passes through.  A ``DataFrame`` (time-varying value weights)
+    is reduced with ``mean`` (sample-average composition, the default),
+    ``first`` or ``last``.
+    """
+    if isinstance(weights, pd.Series):
+        return weights
+    if how == "mean":
+        return weights.mean()
+    if how == "first":
+        return weights.iloc[0]
+    if how == "last":
+        return weights.iloc[-1]
+    raise ValueError("how must be one of: mean, first, last")
+
+
 def tangency_vs_comparison(
     returns: pd.DataFrame,
     rf: float | pd.Series = config.RF_MONTHLY,
-    comparison: pd.Series | None = None,
+    comparison: pd.Series | pd.DataFrame | None = None,
+    comparison_how: str = "mean",
 ) -> pd.DataFrame:
     """Tangency weights beside the comparison weights.
 
-    ``comparison`` defaults to the naive 1/N portfolio.  Pass value weights to
-    match the handout's requirement.
+    ``comparison`` defaults to the naive 1/N portfolio.  Pass a value-weight
+    series or a date-by-asset value-weight panel (reduced via
+    :func:`representative_weights`) to match the handout's requirement.
     """
     means = excess_means(returns, rf)
     tangency = tangency_weights(means, returns.cov())
     if comparison is None:
         comparison = equal_weights(returns.columns)
+    comparison = representative_weights(comparison, how=comparison_how)
     comparison = comparison.reindex(returns.columns)
     return pd.DataFrame({"tangency": tangency, "comparison": comparison})
 
@@ -116,7 +141,7 @@ def plot_weights(
 def run_portfolio_analysis(
     returns: pd.DataFrame,
     rf: float | pd.Series = config.RF_MONTHLY,
-    comparison: pd.Series | None = None,
+    comparison: pd.Series | pd.DataFrame | None = None,
     comparison_label: str = "1/N",
     output_dir: str | Path | None = None,
 ) -> PortfolioAnalysisResult:
@@ -126,6 +151,13 @@ def run_portfolio_analysis(
     summary = summary_statistics(returns, rf)
     summary_path = out_dir / "summary_stats.csv"
     summary.to_csv(summary_path)
+
+    # Persist the month-by-month comparison weights when they vary over time,
+    # so the point-in-time benchmark is auditable rather than a single snapshot.
+    value_weights_path = None
+    if isinstance(comparison, pd.DataFrame):
+        value_weights_path = out_dir / "value_weights.csv"
+        comparison.to_csv(value_weights_path)
 
     weights = tangency_vs_comparison(returns, rf, comparison)
     plot_path = plot_weights(
@@ -139,11 +171,15 @@ def run_portfolio_analysis(
     corr = weight_correlation(drift, "first half", "second half")
     most_extreme = float(np.abs(drift["full sample"]).max())
 
+    output_paths = {"summary": summary_path, "weights": plot_path, "subsample": drift_path}
+    if value_weights_path is not None:
+        output_paths["value_weights"] = value_weights_path
+
     return PortfolioAnalysisResult(
         summary=summary,
         weights=weights,
         drift=drift,
         weight_correlation=corr,
         most_extreme_weight=most_extreme,
-        output_paths={"summary": summary_path, "weights": plot_path, "subsample": drift_path},
+        output_paths=output_paths,
     )

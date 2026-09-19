@@ -107,19 +107,27 @@ def _resolve_rf(args: argparse.Namespace, returns: pd.DataFrame) -> float | pd.S
 
 def _resolve_comparison(
     args: argparse.Namespace, returns: pd.DataFrame
-) -> tuple[pd.Series | None, str]:
+) -> tuple[pd.Series | pd.DataFrame | None, str]:
     """Pick the comparison weights and a label for the chart.
 
     Priority: explicit ``--value-weights`` file, then the registered
-    value-weight file for the chosen universe, else the 1/N portfolio.
+    value-weight file for the chosen universe, else the 1/N portfolio.  For a
+    date-by-asset value-weight panel the chart uses the sample-average weights
+    (the full monthly panel is written to the output directory).
     """
+    dates = returns.index
     if args.value_weights is not None:
-        return load_value_weights(path=args.value_weights, assets=returns.columns), "value weights"
+        return (
+            load_value_weights(path=args.value_weights, assets=returns.columns, dates=dates),
+            "value weights",
+        )
     if not args.equal_weights:
         registered = config.value_weights_path(args.universe)
         if registered is not None and registered.exists():
-            weights = load_value_weights(path=registered, assets=returns.columns)
-            return weights, "value weights"
+            weights = load_value_weights(
+                path=registered, assets=returns.columns, dates=dates
+            )
+            return weights, "value weights (sample average)"
     return None, "1/N"
 
 
@@ -148,6 +156,8 @@ def _run_portfolio_analysis(args: argparse.Namespace) -> int:
         result.output_paths["weights"],
         f"(most extreme tangency position: {result.most_extreme_weight:+.0%})",
     )
+    if "value_weights" in result.output_paths:
+        print("Point-in-time value weights written:", result.output_paths["value_weights"])
     print(
         "Subsample weights written:",
         result.output_paths["subsample"],

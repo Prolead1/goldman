@@ -35,6 +35,10 @@ PROJECT_ROOT: Path = _resolve_project_root()
 DATA_DIR: Path = PROJECT_ROOT / "data"
 OUTPUTS_DIR: Path = PROJECT_ROOT / "outputs"
 
+# Raw per-ticker cache written by goldman.data.fetch before any conversion:
+# data/raw/market_caps/<universe>/<ticker>.csv
+RAW_DIR: Path = DATA_DIR / "raw"
+
 # ------------------------------------------------------------------ defaults
 RF_MONTHLY: float = 0.003  # fallback monthly risk-free rate (use FF3/MAS)
 MIN_OBS: int = 90  # drop assets with fewer clean monthly observations
@@ -51,8 +55,8 @@ UNIVERSES: dict[str, str] = {
 
 FF3_FILENAME = "ff3_monthly.csv"
 
-# Value-weight files written by scripts/fetch_market_caps.py, one per named
-# universe.  Used as the default comparison portfolio where present.
+# Value-weight files written by goldman.data.fetch, one per named universe.
+# Used as the default comparison portfolio where present.
 VALUE_WEIGHT_FILES: dict[str, str] = {
     "us": "value_weights_us.csv",
     "sg": "value_weights_sg.csv",
@@ -78,6 +82,11 @@ def value_weights_path(universe: str) -> Path | None:
     """Return the value-weight CSV for a universe, or ``None`` if unregistered."""
     filename = VALUE_WEIGHT_FILES.get(universe)
     return data_path(filename) if filename else None
+
+
+def raw_market_caps_dir(universe: str) -> Path:
+    """Return the raw per-ticker market-cap cache directory for a universe."""
+    return RAW_DIR / "market_caps" / universe
 
 
 def ensure_outputs_dir(output_dir: Path | None = None) -> Path:
