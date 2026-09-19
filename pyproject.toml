@@ -1,7 +1,7 @@
 [project]
 name = "goldman"
 version = "0.1.0"
-description = "FE 5108 Midterm Project — mean–variance portfolios, the CAPM SML, and factor models on real data"
+description = "FE 5108 Project — mean–variance portfolios, the CAPM SML, and factor models on real data"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

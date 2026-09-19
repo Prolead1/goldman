@@ -1,8 +1,8 @@
-# FE 5108 Midterm Project
+# FE 5108 Project
 
 **From the Mutual-Fund Theorem to the Security Market Line: does the theory survive real data?**
 
-A reproducible research pipeline for the midterm, organized by analysis:
+A reproducible research pipeline for the project, organized by analysis:
 mean–variance portfolio choice and estimation error, the CAPM and the empirical
 security market line, factor models, and the investment-committee memo. The
 portfolio-choice analysis is implemented and tested; the remaining analyses

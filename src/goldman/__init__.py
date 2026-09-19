@@ -1,4 +1,4 @@
-"""FE 5108 Midterm Project — portfolio analytics package.
+"""FE 5108 Project — portfolio analytics package.
 
 Public surface intentionally small: configuration, data loaders, portfolio
 math, and the exhibit builders.

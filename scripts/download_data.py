@@ -1,5 +1,5 @@
 """
-FE 5108 Midterm Project — fallback data downloader.
+FE 5108 Project — fallback data downloader.
 
 Run ONCE on a machine with open internet (instructor or student):
 
