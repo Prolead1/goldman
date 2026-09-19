@@ -127,6 +127,68 @@ def test_build_value_weights_from_raw(tmp_path, monkeypatch):
     assert feb["a"] == pytest.approx(0.5)
 
 
+def test_market_caps_from_shares_raises_when_shares_start_late():
+    prices = pd.DataFrame({"a": [10.0]}, index=pd.to_datetime(["2020-01-01"]))
+    shares = pd.DataFrame({"a": [100.0]}, index=pd.to_datetime(["2020-02-01"]))
+    with pytest.raises(ValueError, match="missing"):
+        mc.market_caps_from_shares(prices, shares)
+
+
+def test_value_weights_dataframe_rejects_all_missing_date():
+    caps = pd.DataFrame(
+        {"a": [100.0, float("nan")]},
+        index=pd.to_datetime(["2020-01-01", "2020-02-01"]),
+    )
+    with pytest.raises(ValueError, match="missing"):
+        mc.value_weights_from_market_caps(caps)
+
+
+def test_value_weights_from_raw_requires_close_and_shares():
+    with pytest.raises(ValueError, match="close"):
+        mc.value_weights_from_raw(pd.DataFrame({"close": [1.0]}))
+
+
+def test_build_value_weights_missing_cache(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "RAW_DIR", tmp_path / "absent")
+    with pytest.raises(FileNotFoundError):
+        mc.build_value_weights_from_raw("us")
+
+
+def test_build_value_weights_no_usable_data(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "RAW_DIR", tmp_path)
+    (tmp_path / "us").mkdir()
+    with pytest.raises(ValueError, match="No usable"):
+        mc.build_value_weights_from_raw("us")
+
+
+def test_load_value_weights_requires_asset_column(tmp_path):
+    path = tmp_path / "w.csv"
+    pd.DataFrame({"weight": [1.0]}).to_csv(path, index=False)
+    with pytest.raises(ValueError, match="asset"):
+        mc.load_value_weights(path=path)
+
+
+def test_load_value_weights_requires_weight_or_market_cap(tmp_path):
+    path = tmp_path / "w.csv"
+    pd.DataFrame({"asset": ["a"], "foo": [1.0]}).to_csv(path, index=False)
+    with pytest.raises(ValueError, match="weight"):
+        mc.load_value_weights(path=path)
+
+
+def test_load_value_weights_unknown_universe():
+    with pytest.raises(KeyError):
+        mc.load_value_weights(universe="does-not-exist")
+
+
+def test_load_value_weights_dated_weight_column(tmp_path):
+    path = tmp_path / "w.csv"
+    pd.DataFrame(
+        {"asset": ["a", "b"], "date": ["2020-01-01", "2020-01-01"], "weight": [1.0, 3.0]}
+    ).to_csv(path, index=False)
+    weights = mc.load_value_weights(path=path)
+    assert weights.loc[pd.Timestamp("2020-01-01"), "a"] == pytest.approx(0.25)
+
+
 def test_load_value_weights_requires_path_or_universe():
     with pytest.raises(ValueError):
         mc.load_value_weights()

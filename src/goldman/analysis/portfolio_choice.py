@@ -121,19 +121,43 @@ def plot_weights(
     comparison_label: str = "comparison",
     title: str = "Estimated tangency weights vs comparison weights",
 ) -> Path:
-    """Plot the two weight vectors as one grouped bar chart."""
+    """Plot the two weight vectors as a shared-x, two-panel chart.
+
+    The tangency weights are typically an order of magnitude larger than the
+    comparison weights (extreme long–short positions versus small positive
+    index weights), so the two series get their own panel and y-scale rather
+    than one grouped axis where the comparison bars vanish.
+    """
     output_path = Path(output_path)
-    fig, ax = plt.subplots(figsize=(12, 4))
     positions = np.arange(len(weights))
-    ax.bar(positions - 0.2, weights["tangency"], 0.4, label=r"tangency  $\hat\Sigma^{-1}\hat\mu_e$")
-    ax.bar(positions + 0.2, weights["comparison"], 0.4, label=comparison_label)
-    ax.set_xticks(positions)
-    ax.set_xticklabels(weights.index, rotation=90, fontsize=7)
-    ax.axhline(0, lw=0.8, color="k")
-    ax.legend()
-    ax.set_title(title)
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
+    fig, (ax_top, ax_bot) = plt.subplots(
+        2,
+        1,
+        figsize=(13, 7),
+        sharex=True,
+        gridspec_kw={"height_ratios": [3, 1], "hspace": 0.08},
+    )
+
+    ax_top.bar(
+        positions,
+        weights["tangency"],
+        0.7,
+        color="#1f77b4",
+        label=r"tangency  $\hat\Sigma^{-1}\hat\mu_e$",
+    )
+    ax_top.axhline(0, lw=0.8, color="k")
+    ax_top.set_ylabel("tangency weight")
+    ax_top.legend(loc="upper right")
+    ax_top.set_title(title)
+
+    ax_bot.bar(positions, weights["comparison"], 0.7, color="#ff7f0e", label=comparison_label)
+    ax_bot.axhline(0, lw=0.8, color="k")
+    ax_bot.set_ylabel("comparison")
+    ax_bot.legend(loc="upper right")
+    ax_bot.set_xticks(positions)
+    ax_bot.set_xticklabels(weights.index, rotation=90, fontsize=8)
+
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return output_path
 

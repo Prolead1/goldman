@@ -9,8 +9,18 @@ import pandas as pd
 import pytest
 
 from goldman import config
-from goldman.analysis.portfolio_choice import run_portfolio_analysis, summary_statistics
-from goldman.data import load_ff3, load_returns, monthly_rf, prices_to_returns
+from goldman.analysis.portfolio_choice import (
+    representative_weights,
+    run_portfolio_analysis,
+    summary_statistics,
+)
+from goldman.data import (
+    load_ff3,
+    load_returns,
+    monthly_rf,
+    prices_to_returns,
+    to_period_index,
+)
 
 SYNTHETIC = config.universe_path("synthetic")
 HAS_SYNTHETIC = Path(SYNTHETIC).exists()
@@ -65,6 +75,76 @@ def test_summary_statistics_columns():
         "min month",
         "max month",
     ]
+
+
+def test_to_period_index_converts_to_monthly_periods():
+    frame = pd.DataFrame(
+        {"x": [1.0, 2.0]}, index=pd.to_datetime(["2020-01-01", "2020-02-01"])
+    )
+    out = to_period_index(frame)
+    assert isinstance(out.index, pd.PeriodIndex)
+    assert out.index.freqstr == "M"
+    assert list(out["x"]) == [1.0, 2.0]
+
+
+def test_load_ff3_percent_values_are_rescaled(tmp_path):
+    path = tmp_path / "ff3.csv"
+    pd.DataFrame(
+        {"Date": ["2020-01"], "Mkt-RF": [2.0], "SMB": [1.0], "HML": [0.5], "RF": [0.1]}
+    ).to_csv(path, index=False)
+    ff3 = load_ff3(path=path, as_decimals=False)
+    assert ff3.loc[pd.Period("2020-01", "M"), "Mkt-RF"] == pytest.approx(0.02)
+
+
+def test_monthly_rf_uses_constant_without_factor_file():
+    index = pd.to_datetime(["2020-01-01", "2020-02-01"])
+    rf = monthly_rf(index, ff3=None, fallback=0.004)
+    assert (rf == 0.004).all()
+    assert rf.name == "RF"
+
+
+def test_monthly_rf_falls_back_when_rf_column_missing():
+    ff3 = pd.DataFrame({"Mkt-RF": [0.01]}, index=pd.PeriodIndex(["2020-01"], freq="M"))
+    index = pd.to_datetime(["2020-01-01"])
+    rf = monthly_rf(index, ff3=ff3, fallback=0.002)
+    assert rf.iloc[0] == pytest.approx(0.002)
+
+
+def test_summary_statistics_accepts_rf_series():
+    rng = np.random.default_rng(1)
+    returns = pd.DataFrame(
+        rng.normal(0.01, 0.04, size=(24, 3)),
+        columns=list("ABC"),
+        index=pd.date_range("2020-01-01", periods=24, freq="MS"),
+    )
+    rf = pd.Series(0.003, index=returns.index)
+    stats = summary_statistics(returns, rf=rf)
+    assert stats["sharpe (ann.)"].notna().all()
+
+
+def test_representative_weights_variants():
+    weights = pd.DataFrame(
+        {"a": [0.2, 0.4], "b": [0.8, 0.6]},
+        index=pd.to_datetime(["2020-01-01", "2020-02-01"]),
+    )
+    assert representative_weights(weights, "first")["a"] == pytest.approx(0.2)
+    assert representative_weights(weights, "last")["a"] == pytest.approx(0.4)
+    series = pd.Series({"a": 1.0})
+    assert representative_weights(series) is series
+    with pytest.raises(ValueError):
+        representative_weights(weights, "median")
+
+
+@pytest.mark.skipif(not HAS_SYNTHETIC, reason="synthetic sample not present")
+def test_run_portfolio_analysis_with_value_weight_panel(tmp_path):
+    returns = load_returns(universe="synthetic", min_obs=12)
+    weights = pd.DataFrame(
+        1.0 / returns.shape[1], index=returns.index, columns=returns.columns
+    )
+    result = run_portfolio_analysis(
+        returns, comparison=weights, comparison_label="value weights", output_dir=tmp_path
+    )
+    assert result.output_paths["value_weights"].exists()
 
 
 @pytest.mark.skipif(not HAS_SYNTHETIC, reason="synthetic sample not present")

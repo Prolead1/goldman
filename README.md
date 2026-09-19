@@ -1,4 +1,4 @@
-# FE 5108 Project
+# goldman - FE5108 project
 
 **From the Mutual-Fund Theorem to the Security Market Line: does the theory survive real data?**
 
@@ -36,7 +36,7 @@ slot into `src/goldman/analysis/` alongside it.
 ```bash
 uv sync --extra notebook    # env + Jupyter
 uv run jupyter lab notebooks/portfolio_analysis.ipynb   # run all cells
-uv run pytest               # 24 tests
+uv run pytest               # 40 tests, coverage gate (min 80%)
 uv run ruff check .
 ```
 
