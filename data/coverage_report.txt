@@ -1,0 +1,9 @@
+FE5108 data download, window 2016-09-01 .. 2026-09-01
+
+[us] yfinance batch: 30 of 30 tickers
+[us] saved 30 columns, 120 rows, thinnest ticker has 120 observations
+
+[sg] yfinance batch: 30 of 30 tickers
+[sg] saved 30 columns, 120 rows, thinnest ticker has 60 observations
+
+[ff3] saved 119 months (Mkt-RF, SMB, HML, RF)
