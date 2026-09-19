@@ -18,12 +18,14 @@ slot into `src/goldman/analysis/` alongside it.
 │   ├── config.py               # shared paths, RF default, universe registry
 │   ├── data/                   # pre-cleaning phase
 │   │   ├── prices.py           # price loading, return panels, cleaning
-│   │   └── factors.py          # FF3 factors and the risk-free series
+│   │   ├── factors.py          # FF3 factors and the risk-free series
+│   │   └── market_caps.py      # value weights from market-cap snapshots
 │   ├── analysis/               # portfolio construction and exhibits
 │   │   ├── portfolio.py        # tangency weights, 1/N, subsample re-estimation
 │   │   └── portfolio_choice.py # summary stats, weight chart, subsample drift
 │   └── cli.py                  # `goldman` command-line interface
 ├── scripts/download_data.py    # one-shot network downloader (Yahoo/Stooq/FF3)
+├── scripts/fetch_market_caps.py # yfinance market caps -> value weights
 ├── notebooks/portfolio_analysis.ipynb   # thin wrapper over the package
 ├── tests/                      # pytest suite for the math and loaders
 ├── data/                       # raw cached CSVs (committed)
@@ -35,7 +37,7 @@ slot into `src/goldman/analysis/` alongside it.
 ```bash
 uv sync                     # create the env and install goldman (editable)
 uv run run_all.py           # default: US universe, all implemented analyses
-uv run pytest               # 12 tests
+uv run pytest               # 19 tests
 uv run ruff check .
 ```
 
@@ -46,12 +48,16 @@ Other entry points:
 uv run goldman portfolios --universe sg --use-ff3-rf --min-obs 60
 uv run python -m goldman portfolios --universe synthetic
 
-# Value weights as the comparison in the weight chart (two-column asset,weight CSV)
-uv run goldman portfolios --universe us --value-weights value_weights.csv
+# Force the 1/N comparison instead of the default value weights
+uv run goldman portfolios --universe us --equal-weights
 
-# Download the raw data; needs the optional `data` extra and open internet
+# Override value weights with your own CSV (asset, weight|market_cap)
+uv run goldman portfolios --universe us --value-weights my_weights.csv
+
+# Network scripts; need the optional `data` extra and open internet
 uv sync --extra data
-uv run python scripts/download_data.py
+uv run python scripts/download_data.py        # prices + FF3 factors
+uv run python scripts/fetch_market_caps.py    # value weights for US and SG
 ```
 
 `goldman` resolves the repo root from the installed package, so `data/` and
@@ -74,6 +80,8 @@ Adding an analysis means adding a module here plus a matching subcommand in
 | `data/prices_us_monthly.csv` | 30 US names (21 mega-caps + 9 SPDR sector ETFs) |
 | `data/prices_sg_monthly.csv` | ~30 large SGX names (approximately the STI) |
 | `data/ff3_monthly.csv` | Fama–French 3 factors + RF, decimals, monthly |
+| `data/value_weights_us.csv` | US market-cap snapshot -> value weights |
+| `data/value_weights_sg.csv` | SG market-cap snapshot -> value weights |
 | `data/sample_synthetic_prices.csv` | **Fake** data for smoke-testing; not for the report |
 | `data/coverage_report.txt` | What the downloader fetched |
 
@@ -88,9 +96,11 @@ in `src/goldman/data/`.
   using value weights.
 - Both universes are **today's members backfilled ten years** — the
   survivorship bias the handout asks you to acknowledge and discuss.
-- The weight chart compares tangency weights against **1/N** by default; the
-  handout asks for **value weights**. Supply market caps via the two-column CSV
-  and pass `--value-weights` (or a `Series` to `run_portfolio_analysis`).
+- Value weights come from a **point-in-time (today's) market-cap snapshot**
+  fetched by `scripts/fetch_market_caps.py`, so they inherit the same
+  look-ahead bias. The weight chart uses value weights by default and falls
+  back to 1/N where no snapshot exists (e.g. the synthetic sample); pass
+  `--equal-weights` to force 1/N.
 
 ## Reproducibility
 

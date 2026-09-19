@@ -117,6 +117,7 @@ def run_portfolio_analysis(
     returns: pd.DataFrame,
     rf: float | pd.Series = config.RF_MONTHLY,
     comparison: pd.Series | None = None,
+    comparison_label: str = "1/N",
     output_dir: str | Path | None = None,
 ) -> PortfolioAnalysisResult:
     """Run the portfolio-choice exhibits and write them to ``output_dir``."""
@@ -127,7 +128,9 @@ def run_portfolio_analysis(
     summary.to_csv(summary_path)
 
     weights = tangency_vs_comparison(returns, rf, comparison)
-    plot_path = plot_weights(weights, out_dir / "tangency_weights.png")
+    plot_path = plot_weights(
+        weights, out_dir / "tangency_weights.png", comparison_label=comparison_label
+    )
 
     drift = subsample_tangency(returns, rf).round(3)
     drift_path = out_dir / "subsample_weights.csv"

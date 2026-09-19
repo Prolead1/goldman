@@ -51,6 +51,13 @@ UNIVERSES: dict[str, str] = {
 
 FF3_FILENAME = "ff3_monthly.csv"
 
+# Value-weight files written by scripts/fetch_market_caps.py, one per named
+# universe.  Used as the default comparison portfolio where present.
+VALUE_WEIGHT_FILES: dict[str, str] = {
+    "us": "value_weights_us.csv",
+    "sg": "value_weights_sg.csv",
+}
+
 
 def data_path(filename: str) -> Path:
     """Return an absolute path inside the data directory."""
@@ -65,6 +72,12 @@ def universe_path(universe: str) -> Path:
         valid = ", ".join(sorted(UNIVERSES))
         raise KeyError(f"Unknown universe {universe!r}; choose one of: {valid}") from exc
     return data_path(filename)
+
+
+def value_weights_path(universe: str) -> Path | None:
+    """Return the value-weight CSV for a universe, or ``None`` if unregistered."""
+    filename = VALUE_WEIGHT_FILES.get(universe)
+    return data_path(filename) if filename else None
 
 
 def ensure_outputs_dir(output_dir: Path | None = None) -> Path:

@@ -7,6 +7,10 @@ FF3 risk-free rate::
 
     goldman portfolios --universe us --use-ff3-rf
 
+Run the same analysis but force the 1/N comparison instead of value weights::
+
+    goldman portfolios --universe us --equal-weights
+
 Run every implemented analysis on the synthetic sample::
 
     goldman all --universe synthetic --output-dir outputs/smoke
@@ -22,24 +26,9 @@ import pandas as pd
 
 from . import config
 from .analysis import portfolio_choice
-from .data import load_ff3, load_returns, monthly_rf
+from .data import load_ff3, load_returns, load_value_weights, monthly_rf
 
 __all__ = ["main"]
-
-
-def _load_value_weights(path: Path, assets: pd.Index) -> pd.Series:
-    """Load a two-column ``asset,weight`` CSV and align it to ``assets``."""
-    frame = pd.read_csv(path)
-    if frame.shape[1] < 2:
-        raise ValueError(f"{path} must have at least two columns (asset, weight).")
-    frame = frame.iloc[:, :2]
-    frame.columns = ["asset", "weight"]
-    series = frame.set_index("asset")["weight"].astype(float)
-    series = series.reindex(assets)
-    if series.isna().any():
-        missing = ", ".join(series[series.isna()].index)
-        raise ValueError(f"Value weights missing for: {missing}")
-    return series / series.sum()
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -81,7 +70,15 @@ def _build_parser() -> argparse.ArgumentParser:
             "--value-weights",
             type=Path,
             default=None,
-            help="Two-column CSV (asset,weight) to use as the comparison weights.",
+            help=(
+                "CSV with an 'asset' column and 'weight' or 'market_cap' "
+                "(default: the registered value-weight file for --universe)."
+            ),
+        )
+        p.add_argument(
+            "--equal-weights",
+            action="store_true",
+            help="Force the 1/N portfolio as the comparison instead of value weights.",
         )
 
     portfolios = sub.add_parser(
@@ -108,21 +105,41 @@ def _resolve_rf(args: argparse.Namespace, returns: pd.DataFrame) -> float | pd.S
     return args.rf
 
 
+def _resolve_comparison(
+    args: argparse.Namespace, returns: pd.DataFrame
+) -> tuple[pd.Series | None, str]:
+    """Pick the comparison weights and a label for the chart.
+
+    Priority: explicit ``--value-weights`` file, then the registered
+    value-weight file for the chosen universe, else the 1/N portfolio.
+    """
+    if args.value_weights is not None:
+        return load_value_weights(path=args.value_weights, assets=returns.columns), "value weights"
+    if not args.equal_weights:
+        registered = config.value_weights_path(args.universe)
+        if registered is not None and registered.exists():
+            weights = load_value_weights(path=registered, assets=returns.columns)
+            return weights, "value weights"
+    return None, "1/N"
+
+
 def _run_portfolio_analysis(args: argparse.Namespace) -> int:
     returns = _resolve_returns(args)
     rf = _resolve_rf(args, returns)
-
-    comparison = None
-    if args.value_weights is not None:
-        comparison = _load_value_weights(args.value_weights, returns.columns)
+    comparison, comparison_label = _resolve_comparison(args, returns)
 
     print(
         f"Universe: {returns.shape[1]} assets, {returns.shape[0]} months "
         f"({returns.index[0]:%Y-%m} .. {returns.index[-1]:%Y-%m})"
     )
+    print(f"Comparison portfolio: {comparison_label}")
 
     result = portfolio_choice.run_portfolio_analysis(
-        returns, rf=rf, comparison=comparison, output_dir=args.output_dir
+        returns,
+        rf=rf,
+        comparison=comparison,
+        comparison_label=comparison_label,
+        output_dir=args.output_dir,
     )
 
     print("Summary statistics written:", result.output_paths["summary"])
