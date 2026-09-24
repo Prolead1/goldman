@@ -1,0 +1,11 @@
+"""Run Kai's offline Stage 1 comparison from the repository checkout."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+
+from goldman.analysis.kai_us21 import main  # noqa: E402
+
+if __name__ == "__main__":
+    main()
