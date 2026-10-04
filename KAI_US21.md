@@ -68,3 +68,27 @@ uv run ruff check .
 
 AI assistance with code, validation and drafting should be acknowledged in the final
 appendix. Group members remain responsible for verifying the inputs and interpreting results.
+
+## Stage 2: CAPM
+
+Run `python run_kai_stage2.py` (or `uv run python run_kai_stage2.py`),
+or open `notebooks/kai_stage2.ipynb` and run its cells top to bottom.
+The existing cached data and Stage 1 selection/window are reused. No new dependencies
+or data downloads are required beyond the project's existing analysis environment.
+
+Read `outputs/kai_us21_stage2/stage2_report.md`. It includes all four required exhibits:
+
+- **2a:** each stock's beta, alpha, classical alpha t-statistic, and R-squared.
+- **2b:** empirical SML scatter with fitted and theoretical lines.
+- **2c:** the handout's permitted chance-flag assessment of the zero-alpha hypothesis.
+  This is explicitly not a formal GRS test or a global p-value.
+- **2d:** fitted slope and intercept versus CAPM, with interpretation.
+
+Extra checks use Newey-West standard errors and leave-one-stock-out SML fits.
+The full-precision regression CSV, aligned input returns, residuals, line coefficients,
+alpha assessment, charts and input/version manifest are saved alongside the report.
+Stage 1 outputs remain separate. Generated outputs are git-ignored.
+
+The main analysis retains all 21 assets, including the unverified Intel observation
+flagged in Stage 1. Stage 3 factor regressions and Stage 4 market-proxy robustness and
+the final memo remain outstanding. Acknowledge AI assistance with this addition too.
