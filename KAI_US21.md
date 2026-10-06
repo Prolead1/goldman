@@ -90,5 +90,26 @@ alpha assessment, charts and input/version manifest are saved alongside the repo
 Stage 1 outputs remain separate. Generated outputs are git-ignored.
 
 The main analysis retains all 21 assets, including the unverified Intel observation
-flagged in Stage 1. Stage 3 factor regressions and Stage 4 market-proxy robustness and
-the final memo remain outstanding. Acknowledge AI assistance with this addition too.
+flagged in Stage 1. Stage 3 factor regressions are described below; Stage 4 market-proxy
+robustness and the final memo remain outstanding. Acknowledge AI assistance with this addition too.
+
+## Stage 3: size and value factors
+
+Run `python run_kai_stage3.py` (or `uv run python run_kai_stage3.py`),
+or run `notebooks/kai_stage3.ipynb` top to bottom. The same 21 assets and 118 months are
+used for matched CAPM and Fama-French three-factor regressions. No new downloads or
+analysis dependencies are required.
+
+Open `outputs/kai_us21_stage3/stage3_report.md` for:
+
+- **3a:** sourced construction descriptions of the published SMB and HML factors.
+- **3b:** before/after alpha table and chart, including classical and HAC uncertainty.
+- **3c:** which Stage 2 flags persist, attenuate or newly appear, with explicit criteria.
+
+The folder also contains all factor loadings and t-statistics, residuals, adjusted R-squared
+comparisons, a mean-return decomposition, HAC lag sensitivity, and an input/version manifest.
+It is git-ignored; regenerate it or share the folder separately with its images.
+
+The full suite passed with 56 tests and 93.21% coverage when Stage 3 was added; lint checks
+passed and the generated charts were inspected. Stage 4 remains. The Intel data-quality
+flag, sample-selection limitations and AI acknowledgment requirement still apply.
