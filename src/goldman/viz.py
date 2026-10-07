@@ -39,6 +39,8 @@ __all__ = [
     "plot_proxy_comparison",
     "plot_alpha_comparison",
     "plot_factor_cumulative",
+    "plot_oos_growth",
+    "plot_oos_sharpe",
 ]
 
 COLORS = {
@@ -60,6 +62,26 @@ VARIANT_LABELS = {
 }
 PROXY_LABELS = {"value_weighted": "own index", "ff_market": "Fama and French"}
 UNIVERSE_COLORS = {"us": COLORS["long"], "sg": COLORS["positive"]}
+OOS_LABELS = {
+    "index": "value-weighted index",
+    "equal_weight": "1/N",
+    "unconstrained": "tangency (unconstrained)",
+    "long_only": "tangency (no short)",
+    "shrunk": "shrunk",
+    "shrunk_long_only": "shrunk, no short",
+}
+#: One distinct colour per rule; the index is the bar to beat, the raw tangency
+#: the cautionary case.
+OOS_COLORS = {
+    "index": COLORS["accent"],
+    "equal_weight": COLORS["positive"],
+    "unconstrained": COLORS["short"],
+    "long_only": COLORS["long"],
+    "shrunk": COLORS["muted"],
+    "shrunk_long_only": "#9b7ede",
+}
+#: Benchmarks are drawn heavier so the estimated strategies read as challengers.
+OOS_EMPHASIS = {"index": OOS_COLORS["index"], "equal_weight": OOS_COLORS["equal_weight"]}
 
 
 def apply_theme(dark: bool = True, context: str = "notebook") -> None:
@@ -547,4 +569,74 @@ def plot_factor_cumulative(
     axis.set_ylabel("cumulative growth of 1 unit")
     axis.set_title(title)
     axis.legend(loc="best")
+    return _save(fig, output_path)
+
+
+# --------------------------------------------------- out-of-sample validation
+def plot_oos_growth(
+    growth: pd.DataFrame,
+    output_path: str | Path,
+    title: str = "Out-of-sample growth of 1 unit",
+) -> Path:
+    """Cumulative growth of each strategy, benchmarks drawn heavier."""
+    apply_theme()
+    fig, axis = plt.subplots(figsize=(9.5, 5.2))
+    for index, name in enumerate(growth.columns):
+        emphasis = name in OOS_EMPHASIS
+        axis.plot(
+            growth.index,
+            growth[name].to_numpy(),
+            lw=2.6 if emphasis else 1.6,
+            color=OOS_COLORS.get(name, _color(name, index)),
+            alpha=1.0 if emphasis else 0.85,
+            label=_label(name, OOS_LABELS),
+            zorder=3 if emphasis else 2,
+        )
+        final = float(growth[name].iloc[-1])
+        axis.annotate(
+            f"{final:.2f}x",
+            (growth.index[-1], final),
+            fontsize=8,
+            xytext=(5, 0),
+            textcoords="offset points",
+            va="center",
+            color=OOS_COLORS.get(name, COLORS["muted"]),
+        )
+    axis.axhline(1.0, lw=0.8, color=COLORS["muted"], ls=":")
+    axis.set_xlabel("out-of-sample months")
+    axis.set_ylabel("growth of 1 unit")
+    axis.set_title(title)
+    axis.legend(loc="upper left", fontsize=8)
+    return _save(fig, output_path)
+
+
+def plot_oos_sharpe(
+    summary: pd.DataFrame,
+    output_path: str | Path,
+    title: str = "Out-of-sample Sharpe by strategy",
+) -> Path:
+    """Horizontal bars of annualised Sharpe, with the index as the bar to beat."""
+    apply_theme()
+    ordered = summary["Sharpe"].sort_values()
+    positions = np.arange(len(ordered))
+    colors = [OOS_COLORS.get(name, COLORS["long"]) for name in ordered.index]
+
+    fig, axis = plt.subplots(figsize=(9, 4.6))
+    axis.barh(positions, ordered.to_numpy(), color=colors, height=0.62, zorder=3)
+    for position, (name, value) in zip(positions, ordered.items(), strict=True):
+        axis.annotate(
+            f"{value:.2f}",
+            (value, position),
+            fontsize=8,
+            xytext=(4, 0),
+            textcoords="offset points",
+            va="center",
+            color=COLORS["muted"],
+        )
+        if name == "index":
+            axis.axvline(value, lw=1.2, ls="--", color=COLORS["accent"], zorder=2)
+    axis.set_yticks(positions)
+    axis.set_yticklabels([_label(name, OOS_LABELS) for name in ordered.index], fontsize=8)
+    axis.set_xlabel("annualised Sharpe ratio (out of sample)")
+    axis.set_title(title)
     return _save(fig, output_path)

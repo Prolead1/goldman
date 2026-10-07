@@ -146,3 +146,24 @@ def test_plot_factor_cumulative(tmp_path):
         index=index,
     )
     _assert_png(viz.plot_factor_cumulative(factors, tmp_path / "factors.png"))
+
+
+def test_plot_oos_growth(tmp_path):
+    index = pd.date_range("2010-01-01", periods=24, freq="MS")
+    growth = pd.DataFrame(
+        {
+            "index": np.linspace(1.0, 1.40, 24),
+            "equal_weight": np.linspace(1.0, 1.20, 24),
+            "unconstrained": np.linspace(1.0, 0.90, 24),
+        },
+        index=index,
+    )
+    _assert_png(viz.plot_oos_growth(growth, tmp_path / "growth.png"))
+
+
+def test_plot_oos_sharpe(tmp_path):
+    summary = pd.DataFrame(
+        {"Sharpe": [1.10, 0.90, 0.45]},
+        index=["index", "equal_weight", "unconstrained"],
+    )
+    _assert_png(viz.plot_oos_sharpe(summary, tmp_path / "sharpe.png"))
