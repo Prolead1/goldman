@@ -20,6 +20,7 @@ from .factors import load_ff3, monthly_rf
 
 __all__ = [
     "load_rf_file",
+    "monthly_rf_from_sora_export",
     "risk_free_series",
 ]
 
@@ -40,6 +41,65 @@ def load_rf_file(path: str | Path) -> pd.Series:
     if "RF" not in frame.columns:
         raise ValueError(f"{path} must have an 'RF' column.")
     return frame["RF"].astype(float).sort_index().rename("RF")
+
+
+def monthly_rf_from_sora_export(
+    path: str | Path,
+    *,
+    complete_months_only: bool = True,
+) -> pd.DataFrame:
+    """Build a monthly SG risk-free return from a MAS SORA export.
+
+    The MAS "Domestic Interest Rates" download carries daily SORA quotes and the
+    compounded **SORA Index**.  The exact one-month risk-free return is the
+    month-over-month change in that index,
+
+        ``RF_t = SORA_Index(month_end_t) / SORA_Index(month_end_{t-1}) - 1``,
+
+    which equals compounding the daily overnight rate at actual/365 (verified to
+    ~1e-11 against the daily quotes).  Averaging the annualised daily quotes and
+    dividing by 12 is only a first-order approximation and is not used here.
+
+    Returns a frame with columns ``Date`` (``YYYY-MM``) and ``RF``.  With
+    ``complete_months_only`` the final partial month of a mid-month download is
+    dropped.
+    """
+    path = Path(path)
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
+    header = next((i for i, line in enumerate(lines) if "SORA Value Date" in line), None)
+    if header is None:
+        raise ValueError(f"{path} does not look like a MAS SORA export.")
+
+    frame = pd.read_csv(path, skiprows=header, header=0, engine="python")
+    frame = frame.rename(
+        columns={"SORA Value Date": "year", "Unnamed: 1": "month", "Unnamed: 2": "day"}
+    )
+    frame["year"] = frame["year"].ffill()
+    frame["month"] = frame["month"].ffill()
+    frame["sora"] = pd.to_numeric(frame["SORA"], errors="coerce")
+    frame["sora_index"] = pd.to_numeric(frame["SORA Index"], errors="coerce")
+    frame = frame[frame["sora"].notna() & frame["year"].astype(str).str.fullmatch(r"\d{4}")].copy()
+    dates = pd.to_datetime(
+        frame["year"].astype(int).astype(str)
+        + " "
+        + frame["month"].str.strip()
+        + " "
+        + frame["day"].astype(int).astype(str),
+        format="%Y %b %d",
+    )
+    frame = frame.assign(date=dates).sort_values("date").set_index("date")
+
+    month_end_index = frame["sora_index"].resample("ME").last()
+    monthly = month_end_index.pct_change()
+
+    if complete_months_only:
+        last_obs = frame.index.to_series().resample("ME").max()
+        complete = last_obs.reindex(monthly.index) >= (monthly.index - pd.Timedelta(days=3))
+        monthly = monthly[complete]
+
+    out = monthly.dropna().rename("RF").rename_axis("Date").reset_index()
+    out["Date"] = out["Date"].dt.strftime("%Y-%m")
+    return out[out["RF"].notna()]
 
 
 def risk_free_series(

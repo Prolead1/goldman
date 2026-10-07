@@ -7,7 +7,12 @@ import pandas as pd
 import pytest
 
 from goldman import config
-from goldman.data import load_rf_file, market_excess_returns, risk_free_series
+from goldman.data import (
+    load_rf_file,
+    market_excess_returns,
+    monthly_rf_from_sora_export,
+    risk_free_series,
+)
 
 
 def _dates(n: int = 6) -> pd.DatetimeIndex:
@@ -65,6 +70,33 @@ def test_load_rf_file_requires_rf_column(tmp_path):
     pd.DataFrame({"Date": ["2020-01"], "rate": [0.001]}).to_csv(path, index=False)
     with pytest.raises(ValueError, match="RF"):
         load_rf_file(path)
+
+
+def test_monthly_rf_from_sora_export_compounds_the_index(tmp_path):
+    path = tmp_path / "mas.csv"
+    path.write_text(
+        "MAS: test export\n"
+        "\n"
+        "Domestic Interest Rates (Daily)\n"
+        "\n"
+        "\n"
+        "SORA Value Date,,,SORA Publication Date,SORA,SORA Index,Compound SORA - 1 month\n"
+        "2019,Dec,31,01 Jan 2020,1.50,1.0000000000,1.50\n"
+        "2020,Jan,31,01 Feb 2020,1.50,1.0100000000,1.50\n"
+        "2020,Feb,29,02 Mar 2020,1.50,1.0200000000,1.50\n"
+    )
+    out = monthly_rf_from_sora_export(path)
+    # December is the NaN base and is dropped; later months are index ratios.
+    assert out["Date"].tolist() == ["2020-01", "2020-02"]
+    assert out["RF"].iloc[0] == pytest.approx(0.01)
+    assert out["RF"].iloc[1] == pytest.approx(1.02 / 1.01 - 1.0)
+
+
+def test_monthly_rf_from_sora_export_rejects_other_csvs(tmp_path):
+    path = tmp_path / "other.csv"
+    path.write_text("Date,RF\n2020-01,0.001\n")
+    with pytest.raises(ValueError, match="MAS SORA export"):
+        monthly_rf_from_sora_export(path)
 
 
 def test_risk_free_file_source_aligned_and_filled(tmp_path, monkeypatch):

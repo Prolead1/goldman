@@ -17,7 +17,7 @@ from .market_caps import (
 )
 from .markets import market_excess_returns
 from .prices import load_prices, load_returns, prices_to_returns
-from .rates import load_rf_file, risk_free_series
+from .rates import load_rf_file, monthly_rf_from_sora_export, risk_free_series
 
 __all__ = [
     "load_ff3",
@@ -25,6 +25,7 @@ __all__ = [
     "to_period_index",
     "market_excess_returns",
     "load_rf_file",
+    "monthly_rf_from_sora_export",
     "risk_free_series",
     "load_prices",
     "load_returns",

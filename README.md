@@ -96,7 +96,7 @@ stage top to bottom.
 | `data/prices_us_monthly.csv` | 30 US names (21 mega-caps + 9 SPDR sector ETFs) |
 | `data/prices_sg_monthly.csv` | ~30 large SGX names (approximately the STI) |
 | `data/ff3_monthly.csv` | Fama–French 3 factors + RF, decimals, monthly (US) |
-| `data/rf_sg_monthly.csv` | Monthly SG risk-free from MAS daily SORA (monthly mean of the annualised rate / 12), decimal. Provenance in `rf_sg_monthly.source.txt` |
+| `data/rf_sg_monthly.csv` | Monthly SG risk-free from the MAS compounded SORA Index (month-over-month change), decimal. Raw export and method in `data/raw/mas/` and `rf_sg_monthly.source.txt` |
 | `data/raw/<universe>/<ticker>.csv` | Raw per-ticker `close`, `adj_close`, `shares` cache |
 | `data/value_weights_us.csv` | US point-in-time market cap -> monthly value weights |
 | `data/value_weights_sg.csv` | SG point-in-time market cap -> monthly value weights |
@@ -120,10 +120,10 @@ in `src/goldman/data/`.
   format (`asset, date, market_cap, weight`); the chart uses the sample-average
   vector and the full monthly panel is written to `outputs/value_weights.csv`.
 - **Risk-free rates differ by market.** US uses the Fama–French `RF` column;
-  SG uses `data/rf_sg_monthly.csv`, built from MAS daily SORA (monthly mean of
-  the annualised rate / 12; see `rf_sg_monthly.source.txt`). If that file is
-  absent the loader warns and falls back to a documented constant `0.003`/month
-  — never the US rate.
+  SG uses `data/rf_sg_monthly.csv`, the month-over-month change in the MAS
+  compounded SORA Index (the exact daily-compounded return; see
+  `rf_sg_monthly.source.txt`). If that file is absent the loader warns and falls
+  back to a documented constant `0.003`/month — never the US rate.
 - Factor data is US-only: Ken French supplies the US `Mkt-RF`/`SMB`/`HML`, so the
   `ff_market` proxy and Stage 3 factors are unavailable for SG until self-built.
 - Residual data limitations: Yahoo has no early share history for a handful of

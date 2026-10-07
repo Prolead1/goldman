@@ -2,23 +2,30 @@ rf_sg_monthly.csv — provenance
 ================================
 
 Source   : Monetary Authority of Singapore (MAS), Financial Database,
-           "Domestic Interest Rates" (daily), column "SORA".
+           "Domestic Interest Rates" (daily).
 Page     : https://eservices.mas.gov.sg/statistics/dir/DomesticInterestRates.aspx
-Export   : "Domestic Interest Rates.csv" downloaded from that page on 2026-10-07.
-Coverage : 2005-07 .. 2026-10 (daily SORA).
+Raw file : data/raw/mas/domestic_interest_rates.csv
+           ("Domestic Interest Rates.csv" downloaded from that page on 2026-10-07.)
+Coverage : 2005-08 .. 2026-09 (complete months; the export's final partial
+           month is dropped).
 
 Transformation
 --------------
-1. Forward-fill the Year/Month columns (they appear only on the first row of
-   each month in the source export) and parse the daily value date.
-2. Average the daily SORA quotes (% per annum) within each calendar month.
-3. Convert to a monthly decimal risk-free return:  mean_daily_SORA / 100 / 12.
+The exact one-month risk-free return is the month-over-month change in MAS's
+compounded SORA Index:
 
-Columns: Date (YYYY-MM), RF (decimal monthly rate).
+    RF_t = SORA_Index(month_end_t) / SORA_Index(month_end_{t-1}) - 1
 
-Notes
------
-SORA is an overnight rate; dividing the monthly-average annualised rate by 12
-follows the course handout ("monthly rate = annual/12 is fine"). The series is a
-risk-free proxy for the SGD universe, consistent with the FF3 monthly RF used by
-the US universe.
+This equals compounding the daily overnight SORA at actual/365 (verified to
+~1e-11 against the daily quotes in that same export). Averaging the annualised
+daily quotes and dividing by 12 is only a first-order approximation — it
+differs by up to ~39 bp/month (~20 bp/year) here and is NOT used.
+
+Reproduce with:
+
+    from goldman.data import monthly_rf_from_sora_export
+    df = monthly_rf_from_sora_export("data/raw/mas/domestic_interest_rates.csv")
+    df.to_csv("data/rf_sg_monthly.csv", index=False)
+
+Columns: Date (YYYY-MM), RF (decimal monthly return). The month label matches
+the asset-return calendar: RF for 2016-10 is the return over October 2016.
