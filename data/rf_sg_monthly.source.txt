@@ -1,0 +1,31 @@
+rf_sg_monthly.csv — provenance
+================================
+
+Source   : Monetary Authority of Singapore (MAS), Financial Database,
+           "Domestic Interest Rates" (daily).
+Page     : https://eservices.mas.gov.sg/statistics/dir/DomesticInterestRates.aspx
+Raw file : data/raw/mas/domestic_interest_rates.csv
+           ("Domestic Interest Rates.csv" downloaded from that page on 2026-10-07.)
+Coverage : 2005-08 .. 2026-09 (complete months; the export's final partial
+           month is dropped).
+
+Transformation
+--------------
+The exact one-month risk-free return is the month-over-month change in MAS's
+compounded SORA Index:
+
+    RF_t = SORA_Index(month_end_t) / SORA_Index(month_end_{t-1}) - 1
+
+This equals compounding the daily overnight SORA at actual/365 (verified to
+~1e-11 against the daily quotes in that same export). Averaging the annualised
+daily quotes and dividing by 12 is only a first-order approximation — it
+differs by up to ~39 bp/month (~20 bp/year) here and is NOT used.
+
+Reproduce with:
+
+    from goldman.data import monthly_rf_from_sora_export
+    df = monthly_rf_from_sora_export("data/raw/mas/domestic_interest_rates.csv")
+    df.to_csv("data/rf_sg_monthly.csv", index=False)
+
+Columns: Date (YYYY-MM), RF (decimal monthly return). The month label matches
+the asset-return calendar: RF for 2016-10 is the return over October 2016.

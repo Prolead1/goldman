@@ -6,7 +6,16 @@ CAPM/SML, factor models, the decision memo) slot in here beside it.
 
 from __future__ import annotations
 
-from . import portfolio, portfolio_choice
+from . import capm, portfolio, portfolio_choice
+from .capm import (
+    CapmResult,
+    SMLFit,
+    empirical_sml,
+    excess_returns,
+    grs_test,
+    run_capm_analysis,
+    security_characteristic_line,
+)
 from .portfolio import (
     equal_weights,
     excess_means,
@@ -24,8 +33,16 @@ from .portfolio_choice import (
 )
 
 __all__ = [
+    "capm",
     "portfolio",
     "portfolio_choice",
+    "CapmResult",
+    "SMLFit",
+    "empirical_sml",
+    "excess_returns",
+    "grs_test",
+    "run_capm_analysis",
+    "security_characteristic_line",
     "PortfolioAnalysisResult",
     "run_portfolio_analysis",
     "summary_statistics",
