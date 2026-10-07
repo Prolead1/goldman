@@ -96,7 +96,7 @@ def apply_theme(dark: bool = True, context: str = "notebook") -> None:
         {
             "figure.autolayout": False,
             "axes.titlesize": 13,
-            "axes.titleweight": "semibold",
+            "axes.titleweight": "bold",
             "axes.labelsize": 10,
             "font.size": 9,
             "savefig.facecolor": plt.rcParams.get("savefig.facecolor", "#0C1C23"),
