@@ -120,6 +120,23 @@ def test_plot_proxy_comparison(tmp_path):
     _assert_png(viz.plot_proxy_comparison(results, tmp_path / "proxy.png"))
 
 
+def test_plot_proxy_shift(tmp_path):
+    index = ["a", "b", "c"]
+    results = {
+        "value_weighted": SimpleNamespace(
+            table=pd.DataFrame(
+                {"beta": [0.8, 1.1, 1.5], "alpha": [0.002, -0.004, 0.001]}, index=index
+            )
+        ),
+        "ff_market": SimpleNamespace(
+            table=pd.DataFrame(
+                {"beta": [0.9, 1.0, 1.4], "alpha": [-0.001, -0.002, 0.003]}, index=index
+            )
+        ),
+    }
+    _assert_png(viz.plot_proxy_shift(results, tmp_path / "proxy_shift.png"))
+
+
 def test_plot_alpha_comparison(tmp_path):
     index = list("abcd")
     alphas = pd.DataFrame(

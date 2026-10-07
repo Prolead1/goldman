@@ -37,6 +37,7 @@ __all__ = [
     "plot_grs",
     "plot_sml_fit",
     "plot_proxy_comparison",
+    "plot_proxy_shift",
     "plot_alpha_comparison",
     "plot_factor_cumulative",
     "plot_oos_growth",
@@ -492,6 +493,53 @@ def plot_proxy_comparison(results: dict, output_path: str | Path) -> Path:
         bbox={"facecolor": "#0C1C23", "edgecolor": COLORS["muted"], "alpha": 0.7},
     )
     axis.legend(loc="lower right")
+    return _save(fig, output_path)
+
+
+def plot_proxy_shift(
+    results: dict,
+    output_path: str | Path,
+    title: str = "How much moves with the market proxy",
+) -> Path:
+    """Betas and alphas under one proxy against the other, side by side.
+
+    The companion to :func:`plot_proxy_comparison`: the left panel shows how far
+    betas move when the proxy changes and the right panel shows the same for
+    alphas, which is the Roll's-critique point that the headline test statistic
+    depends on a choice the analyst makes.
+    """
+    apply_theme()
+    methods = list(results)
+    first, second = methods[0], methods[1]
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 5.2))
+    for axis, field, label in zip(axes, ("beta", "alpha"), ("beta", "monthly alpha"), strict=True):
+        x = results[first].table[field]
+        y = results[second].table[field]
+        axis.scatter(
+            x, y, s=60, color=COLORS["long"], edgecolor="white", linewidth=0.4, zorder=3
+        )
+        low = float(min(x.min(), y.min(), 0.0))
+        high = float(max(x.max(), y.max()))
+        pad = 0.08 * (high - low)
+        limits = [low - pad, high + pad]
+        axis.plot(limits, limits, ls="--", lw=1.3, color=COLORS["theory"], label="same value")
+        for asset in (y - x).abs().sort_values(ascending=False).head(5).index:
+            axis.annotate(
+                asset,
+                (x[asset], y[asset]),
+                fontsize=7,
+                xytext=(4, 3),
+                textcoords="offset points",
+                color=COLORS["muted"],
+            )
+        axis.set_xlim(limits)
+        axis.set_ylim(limits)
+        axis.set_xlabel(f"{label}, {_label(first, PROXY_LABELS)}")
+        axis.set_ylabel(f"{label}, {_label(second, PROXY_LABELS)}")
+        axis.set_title(f"{label.capitalize()} under the two proxies")
+        axis.legend(loc="best")
+    fig.suptitle(title)
     return _save(fig, output_path)
 
 

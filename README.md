@@ -57,10 +57,9 @@ uv run ruff check .
 
 `notebooks/report.ipynb` is **both the written report and the reproducible entry
 point**: it is organised as a report (executive summary, methodology, Stage 1,
-Stage 2, Stage 3, Roll robustness, the Stage-4 memo, and the out-of-sample
-validation) and every table and
-figure in it is generated from the
-committed data when the notebook is run top to bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
+Stage 2, Stage 3, Roll robustness, and the Stage-4 memo, which carries the
+out-of-sample validation and the Roll exhibit) and every table and figure in it
+is generated from the committed data when the notebook is run top to bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
 throughout as a cross-market check. Code cells are tagged `hide_input`, so a
 report export can hide them, e.g.
 `uv run jupyter nbconvert --to html --no-input notebooks/report.ipynb`.
