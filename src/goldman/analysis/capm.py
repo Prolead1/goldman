@@ -149,21 +149,29 @@ def empirical_sml(table: pd.DataFrame, market_excess: pd.Series) -> SMLFit:
     )
 
 
-def grs_test(excess: pd.DataFrame, market_excess: pd.Series) -> dict[str, float]:
+def grs_test(
+    excess: pd.DataFrame,
+    factors: pd.Series | pd.DataFrame,
+) -> dict[str, float]:
     """Gibbons–Ross–Shanken test that all alphas are jointly zero.
 
     Implements the classic statistic
 
         ``F = (T-N-K)/N * (1 + mu' Omega^{-1} mu)^{-1} * alpha' Sigma^{-1} alpha``
 
-    with ``K = 1`` factor, and returns the F statistic, its p-value and the
-    degrees of freedom.
+    for ``K`` factors (``K = 1`` for the CAPM, ``K >= 2`` for a factor model),
+    and returns the F statistic, its p-value and the degrees of freedom.  Pass a
+    ``Series`` for a single factor or a ``DataFrame`` for several; the factor
+    columns must be in the same order as the regression design.
     """
-    factors = market_excess.reindex(excess.index).astype(float)
-    if factors.isna().any():
-        raise ValueError("market_excess does not cover the whole return calendar.")
+    factors = factors.reindex(excess.index).astype(float)
+    missing = factors.isna().any(axis=1) if isinstance(factors, pd.DataFrame) else factors.isna()
+    if missing.any():
+        raise ValueError("factors do not cover the whole return calendar.")
     y = excess.to_numpy(dtype=float)
-    f = factors.to_numpy(dtype=float).reshape(-1, 1)
+    f = factors.to_numpy(dtype=float)
+    if f.ndim == 1:
+        f = f.reshape(-1, 1)
     t, n_assets = y.shape
     k = f.shape[1]
     if t - n_assets - k <= 0:
