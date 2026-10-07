@@ -31,7 +31,9 @@ swapping the market proxy is a single argument.
 │   ├── analysis/               # portfolio construction and exhibits
 │   │   ├── portfolio.py        # tangency weights, 1/N, subsample re-estimation
 │   │   ├── portfolio_choice.py # summary stats, weight chart, subsample drift
-│   │   └── capm.py             # SCL regressions, empirical SML, GRS test
+│   │   ├── capm.py             # SCL regressions, empirical SML, GRS test
+│   │   └── robustness.py       # no-short and shrinkage variants
+│   ├── viz.py                  # shared theme (seaborn + qbstyles) and figures
 │   └── __init__.py             # public API
 ├── notebooks/
 │   └── report.ipynb            # the report + reproducible entry point
@@ -85,6 +87,7 @@ the `GOLDMAN_ROOT` environment variable if needed.
 | `analysis/capm.py` | Per-asset `α̂, β̂, t(α̂), R²`; the empirical vs theoretical SML; the GRS joint alpha test | `capm_<universe>_<proxy>_scl.csv`, `..._sml.png`, `..._summary.txt` |
 | `analysis/robustness.py` | No-short maximum Sharpe, shrinkage of covariance and means, half sample stability, out of sample Sharpe | `robustness_<universe>_diagnostics.csv`, `..._weights.csv`, `robustness_<universe>.png` |
 | `data/markets.py` | Market proxy `R_M - R_f`: cap-weighted composite or FF `Mkt-RF` | — |
+| `viz.py` | The report's look (seaborn with the QuantumBlack dark theme) and one figure per story beat: correlation, risk/return, weights, drift, robustness, alphas, SML, GRS, proxy comparison | `*.png` exhibits |
 
 Adding an analysis means adding a module under `src/goldman/analysis/` and a
 section in `notebooks/report.ipynb`; the notebook reproduces every stage top to

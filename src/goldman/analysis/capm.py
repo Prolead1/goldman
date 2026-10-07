@@ -20,17 +20,14 @@ import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
-import matplotlib
+import numpy as np
+import pandas as pd
+from scipy import stats
 
-matplotlib.use("Agg")  # headless-safe; imported before pyplot
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
-from scipy import stats  # noqa: E402
-
-from .. import config  # noqa: E402
-from ..data import load_ff3, risk_free_series  # noqa: E402
-from ..data.markets import market_excess_returns  # noqa: E402
+from .. import config
+from ..data import load_ff3, risk_free_series
+from ..data.markets import market_excess_returns
+from ..viz import plot_sml
 
 __all__ = [
     "SMLFit",
@@ -200,49 +197,6 @@ def grs_test(excess: pd.DataFrame, market_excess: pd.Series) -> dict[str, float]
     }
 
 
-def plot_sml(
-    table: pd.DataFrame,
-    fit: SMLFit,
-    output_path: str | Path,
-    title: str = "Empirical security market line",
-    fitted_label: str = "fitted SML",
-) -> Path:
-    """Scatter average excess return against beta, with fitted and CAPM lines."""
-    output_path = Path(output_path)
-    beta = table["beta"].to_numpy()
-    mean_excess = table["mean_excess"].to_numpy()
-    grid = np.linspace(beta.min() - 0.1, beta.max() + 0.1, 50)
-
-    fig, ax = plt.subplots(figsize=(9, 6))
-    ax.scatter(beta, mean_excess, color="#1f77b4", zorder=3, label="assets")
-    for asset, b, y in zip(table.index, beta, mean_excess, strict=True):
-        ax.annotate(asset, (b, y), fontsize=7, xytext=(3, 3), textcoords="offset points")
-
-    ax.plot(
-        grid,
-        fit.intercept + fit.slope * grid,
-        color="#ff7f0e",
-        lw=2,
-        label=f"{fitted_label} (slope={fit.slope:.3f}, intercept={fit.intercept:.3f})",
-    )
-    ax.plot(
-        grid,
-        fit.theoretical_slope * grid,
-        color="k",
-        ls="--",
-        lw=1.5,
-        label=f"CAPM theory (slope={fit.theoretical_slope:.3f})",
-    )
-    ax.axhline(0, color="grey", lw=0.7)
-    ax.set_xlabel(r"estimated $\hat\beta_i$")
-    ax.set_ylabel(r"average excess return $\bar{R}_i - \bar{R}_f$")
-    ax.set_title(title)
-    ax.legend(loc="best")
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return output_path
-
-
 def run_capm_analysis(
     returns: pd.DataFrame,
     *,
@@ -298,7 +252,7 @@ def run_capm_analysis(
         table,
         fit,
         out_dir / f"{prefix}_sml.png",
-        title=f"{universe.upper()} empirical SML ({method} market proxy)",
+        title=f"{universe.upper()} empirical SML ({method.replace('_', ' ')} market proxy)",
     )
     summary_path = out_dir / f"{prefix}_summary.txt"
     n_sig = int((table["p_alpha"] < 0.05).sum())

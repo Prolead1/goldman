@@ -12,15 +12,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import matplotlib
+import numpy as np
+import pandas as pd
 
-matplotlib.use("Agg")  # headless-safe; imported before pyplot
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
-
-from .. import config  # noqa: E402
-from .portfolio import (  # noqa: E402
+from .. import config
+from ..viz import plot_weights
+from .portfolio import (
     equal_weights,
     excess_means,
     subsample_tangency,
@@ -113,53 +110,6 @@ def tangency_vs_comparison(
     comparison = representative_weights(comparison, how=comparison_how)
     comparison = comparison.reindex(returns.columns)
     return pd.DataFrame({"tangency": tangency, "comparison": comparison})
-
-
-def plot_weights(
-    weights: pd.DataFrame,
-    output_path: str | Path,
-    comparison_label: str = "comparison",
-    title: str = "Estimated tangency weights vs comparison weights",
-) -> Path:
-    """Plot the two weight vectors as a shared-x, two-panel chart.
-
-    The tangency weights are typically an order of magnitude larger than the
-    comparison weights (extreme long–short positions versus small positive
-    index weights), so the two series get their own panel and y-scale rather
-    than one grouped axis where the comparison bars vanish.
-    """
-    output_path = Path(output_path)
-    positions = np.arange(len(weights))
-    fig, (ax_top, ax_bot) = plt.subplots(
-        2,
-        1,
-        figsize=(13, 7),
-        sharex=True,
-        gridspec_kw={"height_ratios": [3, 1], "hspace": 0.08},
-    )
-
-    ax_top.bar(
-        positions,
-        weights["tangency"],
-        0.7,
-        color="#1f77b4",
-        label=r"tangency  $\hat\Sigma^{-1}\hat\mu_e$",
-    )
-    ax_top.axhline(0, lw=0.8, color="k")
-    ax_top.set_ylabel("tangency weight")
-    ax_top.legend(loc="upper right")
-    ax_top.set_title(title)
-
-    ax_bot.bar(positions, weights["comparison"], 0.7, color="#ff7f0e", label=comparison_label)
-    ax_bot.axhline(0, lw=0.8, color="k")
-    ax_bot.set_ylabel("comparison")
-    ax_bot.legend(loc="upper right")
-    ax_bot.set_xticks(positions)
-    ax_bot.set_xticklabels(weights.index, rotation=90, fontsize=8)
-
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return output_path
 
 
 def run_portfolio_analysis(
