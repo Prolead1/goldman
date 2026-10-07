@@ -19,16 +19,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import matplotlib
+import numpy as np
+import pandas as pd
+from scipy.optimize import minimize
 
-matplotlib.use("Agg")  # headless-safe; imported before pyplot
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
-from scipy.optimize import minimize  # noqa: E402
-
-from .. import config  # noqa: E402
-from .portfolio import excess_means, tangency_weights  # noqa: E402
+from .. import config
+from ..viz import plot_robustness
+from .portfolio import excess_means, tangency_weights
 
 __all__ = [
     "VARIANTS",
@@ -230,48 +227,6 @@ def out_of_sample_sharpe(
     return pd.Series(scores, name="out of sample Sharpe")
 
 
-def plot_robustness(
-    diagnostics: pd.DataFrame,
-    output_path: str | Path,
-    title: str = "Taming the tangency portfolio",
-) -> Path:
-    """Two panels: how extreme the weights are, and how stable they are."""
-    output_path = Path(output_path)
-    labels = [LABELS[v] for v in diagnostics.index]
-    positions = np.arange(len(labels))
-
-    fig, (left, right) = plt.subplots(1, 2, figsize=(11, 4.5))
-    shorted = diagnostics["shorts"].to_numpy()
-    max_weight = diagnostics["max weight"].to_numpy()
-    min_weight = diagnostics["min weight"].to_numpy()
-    left.bar(positions - 0.2, max_weight, 0.4, label="largest long", color="#1f77b4")
-    left.bar(positions + 0.2, min_weight, 0.4, label="largest short", color="#d62728")
-    left.axhline(0, lw=0.8, color="k")
-    left.set_title("Extremes")
-    left.set_ylabel("portfolio weight")
-    for x, count in zip(positions, shorted, strict=True):
-        left.annotate(
-            f"{count} shorts",
-            (x, min(min_weight.min(), 0) - 0.05),
-            ha="center",
-            fontsize=8,
-        )
-    left.legend(loc="upper left")
-
-    right.bar(positions, diagnostics["out of sample Sharpe"], 0.5, color="#2ca02c")
-    right.axhline(0, lw=0.8, color="k")
-    right.set_title("Out of sample Sharpe")
-    right.set_ylabel("annualised Sharpe")
-
-    for axis in (left, right):
-        axis.set_xticks(positions)
-        axis.set_xticklabels(labels, rotation=15, ha="right")
-    fig.suptitle(title)
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return output_path
-
-
 def run_robustness_analysis(
     returns: pd.DataFrame,
     rf: float | pd.Series = config.RF_MONTHLY,
@@ -294,6 +249,7 @@ def run_robustness_analysis(
     weights_path = out_dir / f"robustness_{label}_weights.csv"
     diagnostics_path = out_dir / f"robustness_{label}_diagnostics.csv"
     chart_path = plot_robustness(
+        weights,
         diagnostics,
         out_dir / f"robustness_{label}.png",
         title=f"Taming the tangency portfolio ({label.upper()})",
