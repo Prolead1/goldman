@@ -34,8 +34,7 @@ swapping the market proxy is a single argument.
 │   │   └── capm.py             # SCL regressions, empirical SML, GRS test
 │   └── __init__.py             # public API
 ├── notebooks/
-│   ├── portfolio_analysis.ipynb   # Stage 1 end to end (single entry point)
-│   └── capm_analysis.ipynb        # Stage 2 end to end, US + SG, proxy swap
+│   └── report.ipynb            # the report + reproducible entry point
 ├── tests/                      # pytest suite for the math and loaders
 ├── data/                       # raw cached CSVs (committed)
 │   └── raw/<universe>/        # per-ticker prices + shares cache
@@ -46,17 +45,19 @@ swapping the market proxy is a single argument.
 
 ```bash
 uv sync --extra notebook    # env + Jupyter
-uv run jupyter lab notebooks/portfolio_analysis.ipynb   # run all cells
-uv run pytest               # 40 tests, coverage gate (min 80%)
+uv run jupyter lab notebooks/report.ipynb   # run all cells
+uv run pytest               # tests + coverage gate (min 80%)
 uv run ruff check .
 ```
 
-Each notebook is a reproducible entry point, run top to bottom: it drives the
-package, prints its exhibits and writes them to `outputs/`. In
-`portfolio_analysis.ipynb`, swap `UNIVERSE` at the top to `"sg"`, and pass
-`comparison=None` to `tangency_vs_comparison` / `run_portfolio_analysis` for the
-1/N comparison instead of value weights. In `capm_analysis.ipynb`, edit the
-`UNIVERSES` list and the `method` loop to cover either market and either proxy.
+`notebooks/report.ipynb` is **both the written report and the reproducible entry
+point**: it is organised as a report (executive summary, methodology, Stage 1,
+Stage 2, Roll robustness, recommendation, caveats, appendix) and every table and
+figure in it is generated from the committed data when the notebook is run top to
+bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
+throughout as a cross-market check. Code cells are tagged `hide_input`, so a
+report export can hide them, e.g.
+`uv run jupyter nbconvert --to html --no-input notebooks/report.ipynb`.
 
 Network fetchers need the optional `data` extra and open internet; they run
 only when invoked — nothing imports them:
@@ -86,8 +87,8 @@ the `GOLDMAN_ROOT` environment variable if needed.
 | `data/markets.py` | Market proxy `R_M - R_f`: cap-weighted composite or FF `Mkt-RF` | — |
 
 Adding an analysis means adding a module under `src/goldman/analysis/` and a
-section in `notebooks/portfolio_analysis.ipynb`; the notebook reproduces every
-stage top to bottom.
+section in `notebooks/report.ipynb`; the notebook reproduces every stage top to
+bottom.
 
 ## Data
 
@@ -135,6 +136,8 @@ in `src/goldman/data/`.
 
 ## Reproducibility
 
-`notebooks/portfolio_analysis.ipynb` regenerates every Stage 1 exhibit from the
-committed raw CSVs when run top to bottom. Generated exhibits go to `outputs/`
-(git-ignored). Package versions are pinned in `pyproject.toml` / `uv.lock`.
+`notebooks/report.ipynb` regenerates every exhibit from the committed raw CSVs
+when run top to bottom, and doubles as the report. Generated exhibits go to
+`outputs/` (git-ignored; US and SG portfolio exhibits under `outputs/us/` and
+`outputs/sg/`, CAPM exhibits as `capm_<universe>_<proxy>_*`). Package versions
+are pinned in `pyproject.toml` / `uv.lock`.
