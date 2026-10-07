@@ -8,6 +8,7 @@ settings.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 # --------------------------------------------------------------------- paths
@@ -45,22 +46,102 @@ MIN_OBS: int = 90  # drop assets with fewer clean monthly observations
 TRADING_MONTHS: int = 12  # annualisation factor for monthly data
 
 # --------------------------------------------------------- universe registry
-# ``None`` means the file is resolved lazily via ``data_path`` so that the
-# registry stays valid even if PROJECT_ROOT moves.
-UNIVERSES: dict[str, str] = {
-    "synthetic": "sample_synthetic_prices.csv",
-    "us": "prices_us_monthly.csv",
-    "sg": "prices_sg_monthly.csv",
+
+
+@dataclass(frozen=True)
+class Universe:
+    """One investable market and everything that differs across markets.
+
+    Writing an analysis once and parameterising it by :class:`Universe` is what
+    lets the same Stage 2/3 code run on both the US and Singapore universes.
+
+    Attributes
+    ----------
+    prices_file:
+        Committed monthly price CSV under ``data/``.
+    value_weights_file:
+        Committed long-format value-weight CSV, or ``None`` when unavailable.
+    currency:
+        Currency the returns are denominated in (reporting only).
+    rf_source:
+        Where the risk-free rate comes from:
+        ``"ff3"`` uses the ``RF`` column of the bundled Fama–French file;
+        ``"file"`` reads ``rf_file`` (a committed monthly series);
+        ``"constant"`` returns ``rf_constant``.
+    rf_file:
+        Filename of an optional committed monthly RF series (source ``"file"``).
+    rf_constant:
+        Documented fallback monthly rate used when no series is available.
+    market_proxy:
+        Default market excess-return construction: ``"value_weighted"``
+        (cap-weighted composite of the universe) or ``"ff_market"``
+        (the Fama–French ``Mkt-RF`` factor).
+    factors:
+        Factor columns available for Stage 3 in ``ff3_monthly.csv``.
+    """
+
+    name: str
+    prices_file: str
+    value_weights_file: str | None = None
+    currency: str = "USD"
+    rf_source: str = "constant"
+    rf_file: str | None = None
+    rf_constant: float = RF_MONTHLY
+    market_proxy: str = "value_weighted"
+    factors: tuple[str, ...] = ()
+
+
+# ``None`` filenames are resolved lazily via ``data_path`` so the registry stays
+# valid even if PROJECT_ROOT moves.
+UNIVERSES: dict[str, Universe] = {
+    "synthetic": Universe(
+        name="synthetic",
+        prices_file="sample_synthetic_prices.csv",
+        currency="USD",
+        rf_source="constant",
+    ),
+    "us": Universe(
+        name="us",
+        prices_file="prices_us_monthly.csv",
+        value_weights_file="value_weights_us.csv",
+        currency="USD",
+        rf_source="ff3",
+        market_proxy="value_weighted",
+        factors=("Mkt-RF", "SMB", "HML"),
+    ),
+    "sg": Universe(
+        name="sg",
+        prices_file="prices_sg_monthly.csv",
+        value_weights_file="value_weights_sg.csv",
+        currency="SGD",
+        rf_source="file",
+        rf_file="rf_sg_monthly.csv",
+        rf_constant=RF_MONTHLY,
+        market_proxy="value_weighted",
+        factors=(),
+    ),
 }
 
 FF3_FILENAME = "ff3_monthly.csv"
 
-# Value-weight files written by goldman.data.fetch, one per named universe.
-# Used as the default comparison portfolio where present.
+# Backwards-compatible filename map; the registry above is the source of truth.
 VALUE_WEIGHT_FILES: dict[str, str] = {
-    "us": "value_weights_us.csv",
-    "sg": "value_weights_sg.csv",
+    u.name: u.value_weights_file for u in UNIVERSES.values() if u.value_weights_file
 }
+
+
+def get_universe(universe: str) -> Universe:
+    """Return the :class:`Universe` registry entry, or raise ``KeyError``."""
+    try:
+        return UNIVERSES[universe]
+    except KeyError as exc:
+        valid = ", ".join(sorted(UNIVERSES))
+        raise KeyError(f"Unknown universe {universe!r}; choose one of: {valid}") from exc
+
+
+def universe_names() -> list[str]:
+    """Sorted names of every registered universe."""
+    return sorted(UNIVERSES)
 
 
 def data_path(filename: str) -> Path:
@@ -70,17 +151,12 @@ def data_path(filename: str) -> Path:
 
 def universe_path(universe: str) -> Path:
     """Return the price CSV for a named universe, or raise ``KeyError``."""
-    try:
-        filename = UNIVERSES[universe]
-    except KeyError as exc:
-        valid = ", ".join(sorted(UNIVERSES))
-        raise KeyError(f"Unknown universe {universe!r}; choose one of: {valid}") from exc
-    return data_path(filename)
+    return data_path(get_universe(universe).prices_file)
 
 
 def value_weights_path(universe: str) -> Path | None:
     """Return the value-weight CSV for a universe, or ``None`` if unregistered."""
-    filename = VALUE_WEIGHT_FILES.get(universe)
+    filename = get_universe(universe).value_weights_file
     return data_path(filename) if filename else None
 
 

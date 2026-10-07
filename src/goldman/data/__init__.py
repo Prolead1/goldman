@@ -15,12 +15,17 @@ from .market_caps import (
     value_weights_from_market_caps,
     value_weights_from_raw,
 )
+from .markets import market_excess_returns
 from .prices import load_prices, load_returns, prices_to_returns
+from .rates import load_rf_file, risk_free_series
 
 __all__ = [
     "load_ff3",
     "monthly_rf",
     "to_period_index",
+    "market_excess_returns",
+    "load_rf_file",
+    "risk_free_series",
     "load_prices",
     "load_returns",
     "prices_to_returns",
