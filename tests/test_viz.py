@@ -118,3 +118,31 @@ def test_plot_proxy_comparison(tmp_path):
         ),
     }
     _assert_png(viz.plot_proxy_comparison(results, tmp_path / "proxy.png"))
+
+
+def test_plot_alpha_comparison(tmp_path):
+    index = list("abcd")
+    alphas = pd.DataFrame(
+        {"CAPM": [0.010, -0.004, 0.002, 0.006], "Two-factor": [0.002, -0.001, 0.001, -0.003]},
+        index=index,
+    )
+    summary = pd.DataFrame(
+        {
+            "mean |alpha|": [0.0055, 0.00175],
+            "alphas p<0.05": [1, 0],
+        },
+        index=["CAPM", "Two-factor"],
+    )
+    _assert_png(viz.plot_alpha_comparison(alphas, summary, tmp_path / "alphas.png"))
+
+
+def test_plot_factor_cumulative(tmp_path):
+    index = pd.date_range("2010-01-01", periods=24, freq="MS")
+    factors = pd.DataFrame(
+        {
+            "SMB": np.linspace(-0.02, 0.03, 24),
+            "WML": np.r_[np.full(6, np.nan), np.linspace(-0.01, 0.04, 18)],
+        },
+        index=index,
+    )
+    _assert_png(viz.plot_factor_cumulative(factors, tmp_path / "factors.png"))

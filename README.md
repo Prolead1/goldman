@@ -5,9 +5,9 @@
 A reproducible research pipeline for the project, organized by analysis:
 mean–variance portfolio choice and estimation error, the CAPM and the empirical
 security market line, factor models, and the investment-committee memo. The
-portfolio-choice (Stage 1) and CAPM (Stage 2) analyses are implemented and
-tested for **both** the US and Singapore universes; factor models and the memo
-slot into `src/goldman/analysis/` alongside them.
+portfolio-choice (Stage 1), CAPM (Stage 2) and factor (Stage 3) analyses are
+implemented and tested for **both** the US and Singapore universes; the memo
+slots into `src/goldman/analysis/` alongside them.
 
 Analyses are universe-agnostic: a market is described once by a
 `goldman.config.Universe` (prices, value weights, currency, risk-free source,
@@ -32,6 +32,8 @@ swapping the market proxy is a single argument.
 │   │   ├── portfolio.py        # tangency weights, 1/N, subsample re-estimation
 │   │   ├── portfolio_choice.py # summary stats, weight chart, subsample drift
 │   │   ├── capm.py             # SCL regressions, empirical SML, GRS test
+│   │   ├── factor_construction.py  # self-built size (SMB) and momentum (WML)
+│   │   ├── factor_models.py    # multi-factor regressions, alpha comparison
 │   │   └── robustness.py       # no-short and shrinkage variants
 │   ├── viz.py                  # shared theme (seaborn + qbstyles) and figures
 │   └── __init__.py             # public API
@@ -85,9 +87,11 @@ the `GOLDMAN_ROOT` environment variable if needed.
 |---|---|---|
 | `analysis/portfolio_choice.py` | Annualised summary statistics; the tangency portfolio `w ∝ Σ⁻¹μ_e`; comparison (value/1/N) weights; full- vs subsample re-estimation | `summary_stats.csv`, `tangency_weights.png`, `value_weights.csv`, `subsample_weights.csv` |
 | `analysis/capm.py` | Per-asset `α̂, β̂, t(α̂), R²`; the empirical vs theoretical SML; the GRS joint alpha test | `capm_<universe>_<proxy>_scl.csv`, `..._sml.png`, `..._summary.txt` |
+| `analysis/factor_construction.py` | Self-built SMB (lagged point-in-time size) and WML (12-1 momentum) long–short spreads | `factor_cumulative.png` |
+| `analysis/factor_models.py` | Multi-factor SCL regressions; alphas before/after factors on a common sample; joint GRS | `factors_<universe>_alphas.csv`, `..._summary.csv`, `factors_<universe>_<model>_scl.csv`, `factors_<universe>_alpha_comparison.png` |
 | `analysis/robustness.py` | No-short maximum Sharpe, shrinkage of covariance and means, half sample stability, out of sample Sharpe | `robustness_<universe>_diagnostics.csv`, `..._weights.csv`, `robustness_<universe>.png` |
 | `data/markets.py` | Market proxy `R_M - R_f`: cap-weighted composite or FF `Mkt-RF` | — |
-| `viz.py` | The report's look (seaborn with the QuantumBlack dark theme) and one figure per story beat: correlation, risk/return, weights, drift, robustness, alphas, SML, GRS, proxy comparison | `*.png` exhibits |
+| `viz.py` | The report's look (seaborn with the QuantumBlack dark theme) and one figure per story beat: correlation, risk/return, weights, drift, robustness, alphas, SML, GRS, proxy comparison, factor growth, alpha comparison | `*.png` exhibits |
 
 Adding an analysis means adding a module under `src/goldman/analysis/` and a
 section in `notebooks/report.ipynb`; the notebook reproduces every stage top to
@@ -99,7 +103,7 @@ bottom.
 |---|---|
 | `data/prices_us_monthly.csv` | 30 US names (21 mega-caps + 9 SPDR sector ETFs) |
 | `data/prices_sg_monthly.csv` | ~30 large SGX names (approximately the STI) |
-| `data/ff3_monthly.csv` | Fama–French 3 factors + RF, decimals, monthly (US) |
+| `data/ff3_monthly.csv` | Fama–French 3 factors + RF, decimals, monthly (US); the Stage-3 external benchmark |
 | `data/rf_sg_monthly.csv` | Monthly SG risk-free from the MAS compounded SORA Index (month-over-month change), decimal. Raw export and method in `data/raw/mas/` and `rf_sg_monthly.source.txt` |
 | `data/raw/<universe>/<ticker>.csv` | Raw per-ticker `close`, `adj_close`, `shares` cache |
 | `data/value_weights_us.csv` | US point-in-time market cap -> monthly value weights |
@@ -129,7 +133,11 @@ in `src/goldman/data/`.
   `rf_sg_monthly.source.txt`). If that file is absent the loader warns and falls
   back to a documented constant `0.003`/month — never the US rate.
 - Factor data is US-only: Ken French supplies the US `Mkt-RF`/`SMB`/`HML`, so the
-  `ff_market` proxy and Stage 3 factors are unavailable for SG until self-built.
+  `ff_market` proxy is unavailable for SG. Stage 3 therefore **builds size and
+  momentum long–short spreads from the universe itself** for both markets, and
+  uses Ken French only as the US external benchmark. The self-built factors are
+  equal-weighted 30/40/30 quantile spreads; a mega-cap universe makes the size
+  leg a weak proxy, which the report states.
 - Residual data limitations: Yahoo has no early share history for a handful of
   names (META before 2022-07; a few SG listings), so those months carry the
   earliest known count back to the sample start — an approximation, but a

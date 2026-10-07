@@ -37,6 +37,8 @@ __all__ = [
     "plot_grs",
     "plot_sml_fit",
     "plot_proxy_comparison",
+    "plot_alpha_comparison",
+    "plot_factor_cumulative",
 ]
 
 COLORS = {
@@ -468,4 +470,81 @@ def plot_proxy_comparison(results: dict, output_path: str | Path) -> Path:
         bbox={"facecolor": "#0C1C23", "edgecolor": COLORS["muted"], "alpha": 0.7},
     )
     axis.legend(loc="lower right")
+    return _save(fig, output_path)
+
+
+# ------------------------------------------------------------- Stage 3 factors
+def plot_alpha_comparison(
+    alphas: pd.DataFrame,
+    summary: pd.DataFrame | None,
+    output_path: str | Path,
+    title: str = "Alphas before and after factors",
+) -> Path:
+    """Dumbbell chart: each asset's alpha under every factor model.
+
+    Assets are ordered by the first model's alpha (usually the CAPM), a thin
+    line marks the spread between the smallest and largest alpha, and the legend
+    reports each model's mean absolute alpha and significant count.
+    """
+    apply_theme()
+    models = list(alphas.columns)
+    order = alphas[models[0]].sort_values().index
+    positions = np.arange(len(order))
+
+    fig, axis = plt.subplots(figsize=(9.5, max(5.0, 0.26 * len(order))))
+    for position, asset in zip(positions, order, strict=True):
+        low, high = float(alphas.loc[asset].min()), float(alphas.loc[asset].max())
+        axis.plot(
+            [low, high], [position, position], color=COLORS["muted"], lw=1.0, alpha=0.55, zorder=1
+        )
+    for index, model in enumerate(models):
+        values = alphas.loc[order, model]
+        label = model
+        if summary is not None and model in summary.index:
+            row = summary.loc[model]
+            significant = int(row["alphas p<0.05"])
+            label = f"{model} (mean |a| {row['mean |alpha|']:.3f}, {significant} sig.)"
+        axis.scatter(
+            values,
+            positions,
+            s=46,
+            color=_color(model, index),
+            edgecolor="white",
+            linewidth=0.4,
+            label=label,
+            zorder=3,
+        )
+    axis.axvline(0, color="white", lw=1.1)
+    axis.set_yticks(positions)
+    axis.set_yticklabels(order, fontsize=7)
+    axis.set_xlabel("monthly alpha")
+    axis.set_title(title)
+    axis.legend(loc="best", fontsize=8)
+    return _save(fig, output_path)
+
+
+def plot_factor_cumulative(
+    factors: pd.DataFrame,
+    output_path: str | Path,
+    title: str = "Cumulative self-built factor returns",
+) -> Path:
+    """Cumulative growth of one dollar in each factor, on each factor's sample."""
+    apply_theme()
+    fig, axis = plt.subplots(figsize=(9, 5))
+    for index, name in enumerate(factors.columns):
+        series = factors[name].dropna()
+        if series.empty:
+            continue
+        cumulative = (1.0 + series).cumprod()
+        axis.plot(
+            cumulative.index,
+            cumulative.to_numpy(),
+            lw=2.0,
+            color=_color(name, index),
+            label=name,
+        )
+    axis.axhline(1.0, lw=0.8, color=COLORS["muted"])
+    axis.set_ylabel("cumulative growth of 1 unit")
+    axis.set_title(title)
+    axis.legend(loc="best")
     return _save(fig, output_path)
