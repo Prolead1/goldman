@@ -6,8 +6,8 @@ A reproducible research pipeline for the project, organized by analysis:
 mean–variance portfolio choice and estimation error, the CAPM and the empirical
 security market line, factor models, and the investment-committee memo. The
 portfolio-choice (Stage 1), CAPM (Stage 2) and factor (Stage 3) analyses are
-implemented and tested for **both** the US and Singapore universes; the memo
-slots into `src/goldman/analysis/` alongside them.
+implemented and tested for **both** the US and Singapore universes; the Stage-4
+investment-committee memo is written in `notebooks/report.ipynb`.
 
 Analyses are universe-agnostic: a market is described once by a
 `goldman.config.Universe` (prices, value weights, currency, risk-free source,
@@ -56,7 +56,8 @@ uv run ruff check .
 
 `notebooks/report.ipynb` is **both the written report and the reproducible entry
 point**: it is organised as a report (executive summary, methodology, Stage 1,
-Stage 2, Roll robustness) and every table and figure in it is generated from the
+Stage 2, Stage 3, Roll robustness, and the Stage-4 memo) and every table and
+figure in it is generated from the
 committed data when the notebook is run top to bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
 throughout as a cross-market check. Code cells are tagged `hide_input`, so a
 report export can hide them, e.g.
