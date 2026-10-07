@@ -6,8 +6,8 @@ A reproducible research pipeline for the project, organized by analysis:
 mean–variance portfolio choice and estimation error, the CAPM and the empirical
 security market line, factor models, and the investment-committee memo. The
 portfolio-choice (Stage 1), CAPM (Stage 2) and factor (Stage 3) analyses are
-implemented and tested for **both** the US and Singapore universes; the memo
-slots into `src/goldman/analysis/` alongside them.
+implemented and tested for **both** the US and Singapore universes; the Stage-4
+investment-committee memo is written in `notebooks/report.ipynb`.
 
 Analyses are universe-agnostic: a market is described once by a
 `goldman.config.Universe` (prices, value weights, currency, risk-free source,
@@ -34,7 +34,8 @@ swapping the market proxy is a single argument.
 │   │   ├── capm.py             # SCL regressions, empirical SML, GRS test
 │   │   ├── factor_construction.py  # self-built size (SMB) and momentum (WML)
 │   │   ├── factor_models.py    # multi-factor regressions, alpha comparison
-│   │   └── robustness.py       # no-short and shrinkage variants
+│   │   ├── robustness.py       # no-short and shrinkage variants
+│   │   └── out_of_sample.py    # expanding-window walk-forward validation
 │   ├── viz.py                  # shared theme (seaborn + qbstyles) and figures
 │   └── __init__.py             # public API
 ├── notebooks/
@@ -56,8 +57,9 @@ uv run ruff check .
 
 `notebooks/report.ipynb` is **both the written report and the reproducible entry
 point**: it is organised as a report (executive summary, methodology, Stage 1,
-Stage 2, Roll robustness) and every table and figure in it is generated from the
-committed data when the notebook is run top to bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
+Stage 2, Stage 3, Roll robustness, and the Stage-4 memo, which carries the
+out-of-sample validation and the Roll exhibit) and every table and figure in it
+is generated from the committed data when the notebook is run top to bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
 throughout as a cross-market check. Code cells are tagged `hide_input`, so a
 report export can hide them, e.g.
 `uv run jupyter nbconvert --to html --no-input notebooks/report.ipynb`.
@@ -87,9 +89,10 @@ the `GOLDMAN_ROOT` environment variable if needed.
 |---|---|---|
 | `analysis/portfolio_choice.py` | Annualised summary statistics; the tangency portfolio `w ∝ Σ⁻¹μ_e`; comparison (value/1/N) weights; full- vs subsample re-estimation | `summary_stats.csv`, `tangency_weights.png`, `value_weights.csv`, `subsample_weights.csv` |
 | `analysis/capm.py` | Per-asset `α̂, β̂, t(α̂), R²`; the empirical vs theoretical SML; the GRS joint alpha test | `capm_<universe>_<proxy>_scl.csv`, `..._sml.png`, `..._summary.txt` |
-| `analysis/factor_construction.py` | Self-built SMB (lagged point-in-time size) and WML (12-1 momentum) long–short spreads | `factor_cumulative.png` |
+| `analysis/factor_construction.py` | Self-built SMB (lagged point-in-time size) and WML (12-1 momentum) long–short spreads | `factor_cumulative_<universe>.png` (US panel plots the downloaded Fama–French SMB/HML) |
 | `analysis/factor_models.py` | Multi-factor SCL regressions; alphas before/after factors on a common sample; joint GRS | `factors_<universe>_alphas.csv`, `..._summary.csv`, `factors_<universe>_<model>_scl.csv`, `factors_<universe>_alpha_comparison.png` |
 | `analysis/robustness.py` | No-short maximum Sharpe, shrinkage of covariance and means, half sample stability, out of sample Sharpe | `robustness_<universe>_diagnostics.csv`, `..._weights.csv`, `robustness_<universe>.png` |
+| `analysis/out_of_sample.py` | Expanding-window walk-forward backtest: re-estimate the index, 1/N and the tangency variants each month, trade the next month; out-of-sample growth and Sharpe | `out_of_sample_<universe>_growth.png`, `out_of_sample_<universe>_sharpe.png` |
 | `data/markets.py` | Market proxy `R_M - R_f`: cap-weighted composite or FF `Mkt-RF` | — |
 | `viz.py` | The report's look (seaborn with the QuantumBlack dark theme) and one figure per story beat: correlation, risk/return, weights, drift, robustness, alphas, SML, GRS, proxy comparison, factor growth, alpha comparison | `*.png` exhibits |
 

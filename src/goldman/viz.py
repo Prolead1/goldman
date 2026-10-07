@@ -37,8 +37,11 @@ __all__ = [
     "plot_grs",
     "plot_sml_fit",
     "plot_proxy_comparison",
+    "plot_proxy_shift",
     "plot_alpha_comparison",
     "plot_factor_cumulative",
+    "plot_oos_growth",
+    "plot_oos_sharpe",
 ]
 
 COLORS = {
@@ -60,6 +63,26 @@ VARIANT_LABELS = {
 }
 PROXY_LABELS = {"value_weighted": "own index", "ff_market": "Fama and French"}
 UNIVERSE_COLORS = {"us": COLORS["long"], "sg": COLORS["positive"]}
+OOS_LABELS = {
+    "index": "value-weighted index",
+    "equal_weight": "1/N",
+    "unconstrained": "tangency (unconstrained)",
+    "long_only": "tangency (no short)",
+    "shrunk": "shrunk",
+    "shrunk_long_only": "shrunk, no short",
+}
+#: One distinct colour per rule; the index is the bar to beat, the raw tangency
+#: the cautionary case.
+OOS_COLORS = {
+    "index": COLORS["accent"],
+    "equal_weight": COLORS["positive"],
+    "unconstrained": COLORS["short"],
+    "long_only": COLORS["long"],
+    "shrunk": COLORS["muted"],
+    "shrunk_long_only": "#9b7ede",
+}
+#: Benchmarks are drawn heavier so the estimated strategies read as challengers.
+OOS_EMPHASIS = {"index": OOS_COLORS["index"], "equal_weight": OOS_COLORS["equal_weight"]}
 
 
 def apply_theme(dark: bool = True, context: str = "notebook") -> None:
@@ -74,7 +97,7 @@ def apply_theme(dark: bool = True, context: str = "notebook") -> None:
         {
             "figure.autolayout": False,
             "axes.titlesize": 13,
-            "axes.titleweight": "semibold",
+            "axes.titleweight": "bold",
             "axes.labelsize": 10,
             "font.size": 9,
             "savefig.facecolor": plt.rcParams.get("savefig.facecolor", "#0C1C23"),
@@ -473,6 +496,53 @@ def plot_proxy_comparison(results: dict, output_path: str | Path) -> Path:
     return _save(fig, output_path)
 
 
+def plot_proxy_shift(
+    results: dict,
+    output_path: str | Path,
+    title: str = "How much moves with the market proxy",
+) -> Path:
+    """Betas and alphas under one proxy against the other, side by side.
+
+    The companion to :func:`plot_proxy_comparison`: the left panel shows how far
+    betas move when the proxy changes and the right panel shows the same for
+    alphas, which is the Roll's-critique point that the headline test statistic
+    depends on a choice the analyst makes.
+    """
+    apply_theme()
+    methods = list(results)
+    first, second = methods[0], methods[1]
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 5.2))
+    for axis, field, label in zip(axes, ("beta", "alpha"), ("beta", "monthly alpha"), strict=True):
+        x = results[first].table[field]
+        y = results[second].table[field]
+        axis.scatter(
+            x, y, s=60, color=COLORS["long"], edgecolor="white", linewidth=0.4, zorder=3
+        )
+        low = float(min(x.min(), y.min(), 0.0))
+        high = float(max(x.max(), y.max()))
+        pad = 0.08 * (high - low)
+        limits = [low - pad, high + pad]
+        axis.plot(limits, limits, ls="--", lw=1.3, color=COLORS["theory"], label="same value")
+        for asset in (y - x).abs().sort_values(ascending=False).head(5).index:
+            axis.annotate(
+                asset,
+                (x[asset], y[asset]),
+                fontsize=7,
+                xytext=(4, 3),
+                textcoords="offset points",
+                color=COLORS["muted"],
+            )
+        axis.set_xlim(limits)
+        axis.set_ylim(limits)
+        axis.set_xlabel(f"{label}, {_label(first, PROXY_LABELS)}")
+        axis.set_ylabel(f"{label}, {_label(second, PROXY_LABELS)}")
+        axis.set_title(f"{label.capitalize()} under the two proxies")
+        axis.legend(loc="best")
+    fig.suptitle(title)
+    return _save(fig, output_path)
+
+
 # ------------------------------------------------------------- Stage 3 factors
 def plot_alpha_comparison(
     alphas: pd.DataFrame,
@@ -547,4 +617,74 @@ def plot_factor_cumulative(
     axis.set_ylabel("cumulative growth of 1 unit")
     axis.set_title(title)
     axis.legend(loc="best")
+    return _save(fig, output_path)
+
+
+# --------------------------------------------------- out-of-sample validation
+def plot_oos_growth(
+    growth: pd.DataFrame,
+    output_path: str | Path,
+    title: str = "Out-of-sample growth of 1 unit",
+) -> Path:
+    """Cumulative growth of each strategy, benchmarks drawn heavier."""
+    apply_theme()
+    fig, axis = plt.subplots(figsize=(9.5, 5.2))
+    for index, name in enumerate(growth.columns):
+        emphasis = name in OOS_EMPHASIS
+        axis.plot(
+            growth.index,
+            growth[name].to_numpy(),
+            lw=2.6 if emphasis else 1.6,
+            color=OOS_COLORS.get(name, _color(name, index)),
+            alpha=1.0 if emphasis else 0.85,
+            label=_label(name, OOS_LABELS),
+            zorder=3 if emphasis else 2,
+        )
+        final = float(growth[name].iloc[-1])
+        axis.annotate(
+            f"{final:.2f}x",
+            (growth.index[-1], final),
+            fontsize=8,
+            xytext=(5, 0),
+            textcoords="offset points",
+            va="center",
+            color=OOS_COLORS.get(name, COLORS["muted"]),
+        )
+    axis.axhline(1.0, lw=0.8, color=COLORS["muted"], ls=":")
+    axis.set_xlabel("out-of-sample months")
+    axis.set_ylabel("growth of 1 unit")
+    axis.set_title(title)
+    axis.legend(loc="upper left", fontsize=8)
+    return _save(fig, output_path)
+
+
+def plot_oos_sharpe(
+    summary: pd.DataFrame,
+    output_path: str | Path,
+    title: str = "Out-of-sample Sharpe by strategy",
+) -> Path:
+    """Horizontal bars of annualised Sharpe, with the index as the bar to beat."""
+    apply_theme()
+    ordered = summary["Sharpe"].sort_values()
+    positions = np.arange(len(ordered))
+    colors = [OOS_COLORS.get(name, COLORS["long"]) for name in ordered.index]
+
+    fig, axis = plt.subplots(figsize=(9, 4.6))
+    axis.barh(positions, ordered.to_numpy(), color=colors, height=0.62, zorder=3)
+    for position, (name, value) in zip(positions, ordered.items(), strict=True):
+        axis.annotate(
+            f"{value:.2f}",
+            (value, position),
+            fontsize=8,
+            xytext=(4, 0),
+            textcoords="offset points",
+            va="center",
+            color=COLORS["muted"],
+        )
+        if name == "index":
+            axis.axvline(value, lw=1.2, ls="--", color=COLORS["accent"], zorder=2)
+    axis.set_yticks(positions)
+    axis.set_yticklabels([_label(name, OOS_LABELS) for name in ordered.index], fontsize=8)
+    axis.set_xlabel("annualised Sharpe ratio (out of sample)")
+    axis.set_title(title)
     return _save(fig, output_path)

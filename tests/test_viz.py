@@ -120,6 +120,23 @@ def test_plot_proxy_comparison(tmp_path):
     _assert_png(viz.plot_proxy_comparison(results, tmp_path / "proxy.png"))
 
 
+def test_plot_proxy_shift(tmp_path):
+    index = ["a", "b", "c"]
+    results = {
+        "value_weighted": SimpleNamespace(
+            table=pd.DataFrame(
+                {"beta": [0.8, 1.1, 1.5], "alpha": [0.002, -0.004, 0.001]}, index=index
+            )
+        ),
+        "ff_market": SimpleNamespace(
+            table=pd.DataFrame(
+                {"beta": [0.9, 1.0, 1.4], "alpha": [-0.001, -0.002, 0.003]}, index=index
+            )
+        ),
+    }
+    _assert_png(viz.plot_proxy_shift(results, tmp_path / "proxy_shift.png"))
+
+
 def test_plot_alpha_comparison(tmp_path):
     index = list("abcd")
     alphas = pd.DataFrame(
@@ -146,3 +163,24 @@ def test_plot_factor_cumulative(tmp_path):
         index=index,
     )
     _assert_png(viz.plot_factor_cumulative(factors, tmp_path / "factors.png"))
+
+
+def test_plot_oos_growth(tmp_path):
+    index = pd.date_range("2010-01-01", periods=24, freq="MS")
+    growth = pd.DataFrame(
+        {
+            "index": np.linspace(1.0, 1.40, 24),
+            "equal_weight": np.linspace(1.0, 1.20, 24),
+            "unconstrained": np.linspace(1.0, 0.90, 24),
+        },
+        index=index,
+    )
+    _assert_png(viz.plot_oos_growth(growth, tmp_path / "growth.png"))
+
+
+def test_plot_oos_sharpe(tmp_path):
+    summary = pd.DataFrame(
+        {"Sharpe": [1.10, 0.90, 0.45]},
+        index=["index", "equal_weight", "unconstrained"],
+    )
+    _assert_png(viz.plot_oos_sharpe(summary, tmp_path / "sharpe.png"))
