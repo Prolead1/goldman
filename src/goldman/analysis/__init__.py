@@ -6,7 +6,7 @@ CAPM/SML, factor models, the decision memo) slot in here beside it.
 
 from __future__ import annotations
 
-from . import capm, portfolio, portfolio_choice
+from . import capm, portfolio, portfolio_choice, robustness
 from .capm import (
     CapmResult,
     SMLFit,
@@ -31,11 +31,36 @@ from .portfolio_choice import (
     summary_statistics,
     tangency_vs_comparison,
 )
+from .robustness import (
+    VARIANTS,
+    RobustnessResult,
+    long_only_tangency,
+    out_of_sample_sharpe,
+    run_robustness_analysis,
+    shrink_covariance,
+    shrink_means,
+    tangency_variants,
+    variant_stability,
+    variant_weights,
+    weight_diagnostics,
+)
 
 __all__ = [
     "capm",
     "portfolio",
     "portfolio_choice",
+    "robustness",
+    "VARIANTS",
+    "RobustnessResult",
+    "long_only_tangency",
+    "out_of_sample_sharpe",
+    "run_robustness_analysis",
+    "shrink_covariance",
+    "shrink_means",
+    "tangency_variants",
+    "variant_stability",
+    "variant_weights",
+    "weight_diagnostics",
     "CapmResult",
     "SMLFit",
     "empirical_sml",
