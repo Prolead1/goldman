@@ -1,0 +1,24 @@
+rf_sg_monthly.csv — provenance
+================================
+
+Source   : Monetary Authority of Singapore (MAS), Financial Database,
+           "Domestic Interest Rates" (daily), column "SORA".
+Page     : https://eservices.mas.gov.sg/statistics/dir/DomesticInterestRates.aspx
+Export   : "Domestic Interest Rates.csv" downloaded from that page on 2026-10-07.
+Coverage : 2005-07 .. 2026-10 (daily SORA).
+
+Transformation
+--------------
+1. Forward-fill the Year/Month columns (they appear only on the first row of
+   each month in the source export) and parse the daily value date.
+2. Average the daily SORA quotes (% per annum) within each calendar month.
+3. Convert to a monthly decimal risk-free return:  mean_daily_SORA / 100 / 12.
+
+Columns: Date (YYYY-MM), RF (decimal monthly rate).
+
+Notes
+-----
+SORA is an overnight rate; dividing the monthly-average annualised rate by 12
+follows the course handout ("monthly rate = annual/12 is fine"). The series is a
+risk-free proxy for the SGD universe, consistent with the FF3 monthly RF used by
+the US universe.
