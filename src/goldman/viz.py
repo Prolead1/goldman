@@ -4,6 +4,11 @@ One place for the report's look (seaborn with the QuantumBlack dark theme) and
 one function per story beat.  The functions take plain data or the result
 objects from :mod:`goldman.analysis` and return the path of the figure they
 write, so the notebook only has to call them.
+
+The chart type is chosen to fit the question: a heatmap for the correlation
+structure, scatters for relationships, a strip plot for the weight clouds, a
+forest plot for the alphas, a step histogram for the joint alpha test, and a
+slope chart for the fitted-versus-theory comparison.
 """
 
 from __future__ import annotations
@@ -52,6 +57,7 @@ VARIANT_LABELS = {
     "shrunk_long_only": "shrunk, no short",
 }
 PROXY_LABELS = {"value_weighted": "own index", "ff_market": "Fama and French"}
+UNIVERSE_COLORS = {"us": COLORS["long"], "sg": COLORS["positive"]}
 
 
 def apply_theme(dark: bool = True, context: str = "notebook") -> None:
@@ -83,6 +89,10 @@ def _save(fig: plt.Figure, output_path: str | Path) -> Path:
 
 def _label(name: str, mapping: dict[str, str]) -> str:
     return mapping.get(name, name)
+
+
+def _color(name: str, index: int) -> str:
+    return UNIVERSE_COLORS.get(name, list(COLORS.values())[index % len(COLORS)])
 
 
 # --------------------------------------------------------------- data section
@@ -147,39 +157,36 @@ def plot_weights(
     comparison_label: str = "comparison",
     title: str = "Estimated tangency weights versus the index",
 ) -> Path:
-    """Tangency weights above the comparison weights, sharing the asset order."""
+    """Scatter of index weight against tangency weight, one point per asset."""
     apply_theme()
-    ordered = weights.reindex(weights["tangency"].abs().sort_values(ascending=False).index)
-    positions = np.arange(len(ordered))
+    index_weight = weights["comparison"]
+    tangency = weights["tangency"]
+    colors = np.where(tangency >= 0, COLORS["long"], COLORS["short"])
 
-    fig, (top, bottom) = plt.subplots(
-        2,
-        1,
-        figsize=(13, 7),
-        sharex=True,
-        gridspec_kw={"height_ratios": [3, 1], "hspace": 0.08},
+    fig, axis = plt.subplots(figsize=(8.5, 7))
+    axis.axhline(0, lw=0.8, color=COLORS["muted"])
+    axis.axvline(0, lw=0.8, color=COLORS["muted"])
+    axis.scatter(
+        index_weight, tangency, c=colors, s=80, zorder=3,
+        edgecolor="white", linewidth=0.5,
     )
-    top.bar(positions, ordered["tangency"], 0.7, color=COLORS["long"], label="tangency")
-    top.bar(
-        positions,
-        ordered["tangency"].where(ordered["tangency"] < 0, 0.0),
-        0.7,
-        color=COLORS["short"],
-        label="short leg",
-    )
-    top.axhline(0, lw=0.8, color="white")
-    top.set_ylabel("tangency weight")
-    top.legend(loc="upper right")
-    top.set_title(title)
-
-    bottom.bar(
-        positions, ordered["comparison"], 0.7, color=COLORS["accent"], label=comparison_label
-    )
-    bottom.axhline(0, lw=0.8, color="white")
-    bottom.set_ylabel("index")
-    bottom.legend(loc="upper right")
-    bottom.set_xticks(positions)
-    bottom.set_xticklabels(ordered.index, rotation=90, fontsize=8)
+    for asset in weights.index:
+        axis.annotate(
+            asset,
+            (index_weight[asset], tangency[asset]),
+            fontsize=7,
+            xytext=(4, 3),
+            textcoords="offset points",
+            color=COLORS["muted"],
+        )
+    axis.set_xlabel(comparison_label)
+    axis.set_ylabel("tangency weight")
+    axis.set_title(title)
+    handles = [
+        plt.Line2D([], [], marker="o", ls="", color=COLORS["long"], label="long"),
+        plt.Line2D([], [], marker="o", ls="", color=COLORS["short"], label="short"),
+    ]
+    axis.legend(handles=handles, loc="upper right")
     return _save(fig, output_path)
 
 
@@ -232,43 +239,45 @@ def plot_weight_drift(
 
 
 def plot_robustness(
+    weights: pd.DataFrame,
     diagnostics: pd.DataFrame,
     output_path: str | Path,
     title: str = "Taming the tangency portfolio",
 ) -> Path:
-    """How extreme the weights are, and how the variants score out of sample."""
+    """Every asset weight under each construction, as a jittered strip plot."""
     apply_theme()
-    labels = [_label(name, VARIANT_LABELS) for name in diagnostics.index]
-    positions = np.arange(len(labels))
+    generator = np.random.default_rng(0)
+    variants = list(weights.columns)
+    positions = np.arange(len(variants))
 
-    fig, (left, right) = plt.subplots(1, 2, figsize=(11.5, 4.8))
-    longest = diagnostics["max weight"].to_numpy()
-    shortest = diagnostics["min weight"].to_numpy()
-    shorts = diagnostics["shorts"].to_numpy(dtype=int)
+    fig, axis = plt.subplots(figsize=(9.5, 4.8))
+    for position, variant in zip(positions, variants, strict=True):
+        values = weights[variant].to_numpy(dtype=float)
+        jitter = generator.uniform(-0.18, 0.18, size=len(values))
+        colors = np.where(values >= 0, COLORS["long"], COLORS["short"])
+        axis.scatter(values, position + jitter, c=colors, s=22, alpha=0.8, zorder=3)
+    axis.axvline(0, lw=1.0, color="white")
 
-    left.bar(positions - 0.2, longest, 0.4, color=COLORS["long"], label="largest long")
-    left.bar(positions + 0.2, shortest, 0.4, color=COLORS["short"], label="largest short")
-    left.axhline(0, lw=0.8, color="white")
-    left.set_title("Largest positions")
-    left.set_ylabel("portfolio weight")
-    for x, count in zip(positions, shorts, strict=True):
-        left.annotate(
-            f"{count} shorts", (x, shortest.min() - 0.12), ha="center", fontsize=8,
-            color=COLORS["muted"],
+    labels = []
+    for name in variants:
+        largest = max(
+            abs(diagnostics.loc[name, "max weight"]),
+            abs(diagnostics.loc[name, "min weight"]),
         )
-    left.legend(loc="upper right")
-
-    right.bar(
-        positions, diagnostics["out of sample Sharpe"], 0.55, color=COLORS["positive"]
-    )
-    right.axhline(0, lw=0.8, color="white")
-    right.set_title("Out of sample Sharpe")
-    right.set_ylabel("annualised Sharpe")
-
-    for axis in (left, right):
-        axis.set_xticks(positions)
-        axis.set_xticklabels(labels, rotation=15, ha="right")
-    fig.suptitle(title)
+        sharpe = diagnostics.loc[name, "out of sample Sharpe"]
+        labels.append(
+            f"{_label(name, VARIANT_LABELS)}\n"
+            f"max |weight| {largest:.0%}, Sharpe {sharpe:.2f}"
+        )
+    axis.set_yticks(positions)
+    axis.set_yticklabels(labels, fontsize=8)
+    axis.set_xlabel("portfolio weight")
+    axis.set_title(title)
+    handles = [
+        plt.Line2D([], [], marker="o", ls="", color=COLORS["long"], label="long"),
+        plt.Line2D([], [], marker="o", ls="", color=COLORS["short"], label="short"),
+    ]
+    axis.legend(handles=handles, loc="upper right")
     return _save(fig, output_path)
 
 
@@ -367,100 +376,96 @@ def plot_sml(
 
 
 def plot_grs(results: dict, output_path: str | Path) -> Path:
-    """GRS p-value per universe against the 5% line."""
+    """Step histogram of individual alpha t statistics, with the GRS verdict."""
     apply_theme()
     names = list(results)
-    p_values = [float(results[name].grs["p_value"]) for name in names]
-    positions = np.arange(len(names))
-    colors = [
-        COLORS["short"] if p < 0.05 else COLORS["positive"] for p in p_values
-    ]
-
-    fig, axis = plt.subplots(figsize=(6.5, 4.5))
-    axis.bar(positions, p_values, 0.55, color=colors)
-    axis.axhline(0.05, ls="--", lw=1.2, color=COLORS["accent"], label="5% line")
-    for x, value in zip(positions, p_values, strict=True):
-        axis.annotate(f"p = {value:.3f}", (x, value), ha="center", va="bottom",
-                      fontsize=9, color=COLORS["theory"])
-    axis.set_xticks(positions)
-    axis.set_xticklabels([_label(name, MARKET_LABELS) for name in names])
-    axis.set_ylim(0, max(max(p_values) * 1.25, 0.1))
-    axis.set_ylabel("GRS p value")
-    axis.set_title("Joint test that all alphas are zero")
+    fig, axis = plt.subplots(figsize=(8.5, 4.6))
+    for index, name in enumerate(names):
+        t_stats = results[name].table["t_alpha"].to_numpy()
+        p_value = float(results[name].grs["p_value"])
+        axis.hist(
+            t_stats,
+            bins=12,
+            histtype="step",
+            lw=2.2,
+            color=_color(name, index),
+            label=f"{_label(name, MARKET_LABELS)} (GRS p = {p_value:.3f})",
+        )
+    axis.axvspan(-1.96, 1.96, color=COLORS["muted"], alpha=0.06)
+    for bound in (-1.96, 1.96):
+        axis.axvline(bound, ls=":", lw=1.2, color=COLORS["accent"])
+    axis.axvline(0, lw=1.0, color="white")
+    axis.set_xlabel(r"$t(\hat\alpha_i)$")
+    axis.set_ylabel("number of assets")
+    axis.set_title("Individual alpha t statistics")
     axis.legend(loc="upper right")
     return _save(fig, output_path)
 
 
 def plot_sml_fit(results: dict, output_path: str | Path) -> Path:
-    """Fitted versus theoretical SML slope and intercept by universe."""
+    """Slope chart: how far each universe moves from theory to the fit."""
     apply_theme()
     names = list(results)
-    fitted_slope = [float(results[n].fit.slope) for n in names]
-    theory_slope = [float(results[n].fit.theoretical_slope) for n in names]
-    intercepts = [float(results[n].fit.intercept) for n in names]
-    positions = np.arange(len(names))
-
-    fig, (left, right) = plt.subplots(1, 2, figsize=(10.5, 4.5))
-    left.bar(positions - 0.2, fitted_slope, 0.4, color=COLORS["long"], label="fitted")
-    left.bar(positions + 0.2, theory_slope, 0.4, color=COLORS["accent"], label="theory")
-    left.set_title("SML slope")
-    left.set_ylabel("slope")
-    left.legend(loc="upper right")
-
-    right.bar(positions, intercepts, 0.55, color=COLORS["positive"])
-    right.axhline(0, lw=1.0, color="white")
-    right.set_title("SML intercept (theory = 0)")
-    right.set_ylabel("intercept")
-
-    for axis in (left, right):
-        axis.set_xticks(positions)
-        axis.set_xticklabels([_label(n, MARKET_LABELS) for n in names])
+    fig, (left, right) = plt.subplots(1, 2, figsize=(9.5, 4.2))
+    for index, name in enumerate(names):
+        fit = results[name].fit
+        color = _color(name, index)
+        label = _label(name, MARKET_LABELS)
+        left.plot(
+            [0, 1], [fit.theoretical_slope, fit.slope], marker="o", lw=2.2, color=color, label=label
+        )
+        right.plot([0, 1], [0.0, fit.intercept], marker="o", lw=2.2, color=color, label=label)
+    for axis, ylabel, heading in (
+        (left, "slope", "SML slope"),
+        (right, "intercept", "SML intercept"),
+    ):
+        axis.axhline(0, lw=0.7, color=COLORS["muted"])
+        axis.set_xticks([0, 1])
+        axis.set_xticklabels(["theory", "fitted"])
+        axis.set_xlim(-0.2, 1.2)
+        axis.set_ylabel(ylabel)
+        axis.set_title(heading)
+    left.legend(loc="best")
     fig.suptitle("Fitted line versus CAPM theory")
     return _save(fig, output_path)
 
 
 def plot_proxy_comparison(results: dict, output_path: str | Path) -> Path:
-    """Betas under two market proxies, and the resulting GRS p-values."""
+    """Beta under one market proxy against beta under the other."""
     apply_theme()
     methods = list(results)
-    betas = pd.DataFrame({m: results[m].table["beta"] for m in methods})
-    left_name, right_name = methods[0], methods[1]
-    p_values = [float(results[m].grs["p_value"]) for m in methods]
+    first, second = methods[0], methods[1]
+    x = results[first].table["beta"]
+    y = results[second].table["beta"]
 
-    fig, (left, right) = plt.subplots(1, 2, figsize=(11, 5))
-    left.scatter(
-        betas[left_name],
-        betas[right_name],
-        s=60,
-        color=COLORS["long"],
-        edgecolor="white",
-        linewidth=0.4,
-        zorder=3,
-    )
-    limits = [
-        float(min(betas.min().min(), 0)) - 0.1,
-        float(betas.max().max()) + 0.1,
-    ]
-    left.plot(limits, limits, ls="--", lw=1.2, color=COLORS["theory"], label="same beta")
-    left.set_xlim(limits)
-    left.set_ylim(limits)
-    left.set_xlabel(f"beta, {_label(left_name, PROXY_LABELS)}")
-    left.set_ylabel(f"beta, {_label(right_name, PROXY_LABELS)}")
-    left.set_title("Betas move with the proxy")
-    left.legend(loc="upper left")
-
-    positions = np.arange(len(methods))
-    right.bar(positions, p_values, 0.5, color=COLORS["positive"])
-    right.axhline(0.05, ls="--", lw=1.2, color=COLORS["accent"], label="5% line")
-    for x, value in zip(positions, p_values, strict=True):
-        right.annotate(
-            f"p = {value:.3f}", (x, value), ha="center", va="bottom",
-            fontsize=9, color=COLORS["theory"],
+    fig, axis = plt.subplots(figsize=(7.5, 6.5))
+    axis.scatter(x, y, s=70, color=COLORS["long"], edgecolor="white", linewidth=0.5, zorder=3)
+    limits = [float(min(x.min(), y.min(), 0)) - 0.1, float(max(x.max(), y.max())) + 0.1]
+    axis.plot(limits, limits, ls="--", lw=1.3, color=COLORS["theory"], label="same beta")
+    for asset in (y - x).abs().sort_values(ascending=False).head(6).index:
+        axis.annotate(
+            asset, (x[asset], y[asset]), fontsize=7, xytext=(4, 3),
+            textcoords="offset points", color=COLORS["muted"],
         )
-    right.set_xticks(positions)
-    right.set_xticklabels([_label(m, PROXY_LABELS) for m in methods])
-    right.set_ylim(0, max(max(p_values) * 1.3, 0.1))
-    right.set_ylabel("GRS p value")
-    right.set_title("And so does the verdict")
-    right.legend(loc="upper right")
+    axis.set_xlim(limits)
+    axis.set_ylim(limits)
+    axis.set_xlabel(f"beta, {_label(first, PROXY_LABELS)}")
+    axis.set_ylabel(f"beta, {_label(second, PROXY_LABELS)}")
+    axis.set_title("Betas under two market proxies")
+    verdict = "\n".join(
+        f"{_label(m, PROXY_LABELS)}: GRS p = {float(results[m].grs['p_value']):.3f}"
+        for m in methods
+    )
+    axis.text(
+        0.03,
+        0.97,
+        verdict,
+        transform=axis.transAxes,
+        va="top",
+        ha="left",
+        fontsize=9,
+        color=COLORS["accent"],
+        bbox={"facecolor": "#0C1C23", "edgecolor": COLORS["muted"], "alpha": 0.7},
+    )
+    axis.legend(loc="lower right")
     return _save(fig, output_path)

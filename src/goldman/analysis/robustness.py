@@ -249,6 +249,7 @@ def run_robustness_analysis(
     weights_path = out_dir / f"robustness_{label}_weights.csv"
     diagnostics_path = out_dir / f"robustness_{label}_diagnostics.csv"
     chart_path = plot_robustness(
+        weights,
         diagnostics,
         out_dir / f"robustness_{label}.png",
         title=f"Taming the tangency portfolio ({label.upper()})",

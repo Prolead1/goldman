@@ -61,7 +61,9 @@ def test_plot_weight_drift(tmp_path):
 def test_plot_robustness(tmp_path):
     returns, _ = _panel()
     result = run_robustness_analysis(returns, rf=0.003, output_dir=tmp_path)
-    _assert_png(viz.plot_robustness(result.diagnostics, tmp_path / "robustness.png"))
+    _assert_png(
+        viz.plot_robustness(result.weights, result.diagnostics, tmp_path / "robustness.png")
+    )
     # run_robustness_analysis also renders the chart through viz.
     _assert_png(result.output_paths["chart"])
 
@@ -81,8 +83,13 @@ def test_plot_sml(tmp_path):
 
 def test_plot_grs(tmp_path):
     results = {
-        "us": SimpleNamespace(grs={"p_value": 0.47}),
-        "sg": SimpleNamespace(grs={"p_value": 0.09}),
+        "us": SimpleNamespace(
+            table=pd.DataFrame({"t_alpha": [-2.1, -1.0, 0.5, 2.4, 0.1]}), grs={"p_value": 0.47}
+        ),
+        "sg": SimpleNamespace(
+            table=pd.DataFrame({"t_alpha": [-2.6, -1.5, 0.2, 1.9, 2.2, 0.7]}),
+            grs={"p_value": 0.09},
+        ),
     }
     _assert_png(viz.plot_grs(results, tmp_path / "grs.png"))
 
