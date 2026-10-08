@@ -29,6 +29,7 @@ __all__ = [
     "value_weights_from_raw",
     "build_value_weights_from_raw",
     "load_value_weights",
+    "load_holding_value_weights",
 ]
 
 
@@ -260,4 +261,28 @@ def load_value_weights(
     weights = weights.div(weights.sum(axis=1), axis=0)
     weights.index.name = "date"
     weights.columns.name = "asset"
+    return weights
+
+def load_holding_value_weights(
+    months: pd.Index,
+    universe: str | None = None,
+    path: str | Path | None = None,
+    assets: pd.Index | list[str] | None = None,
+) -> pd.DataFrame:
+    """Value weights *held during* each month: the month-end weights of ``t-1``.
+
+    A value-weighted investor rebalances at the end of month ``t-1`` using the
+    market caps known then, and earns month ``t``'s return.  ``months`` is the
+    return panel's index (timestamps or monthly periods); the result is indexed
+    by monthly ``PeriodIndex`` so it lines up with excess-return panels.
+    """
+    periods = (
+        months.asfreq("M")
+        if isinstance(months, pd.PeriodIndex)
+        else pd.PeriodIndex(pd.to_datetime(months), freq="M")
+    )
+    previous = (periods - 1).to_timestamp()
+    weights = load_value_weights(path=path, universe=universe, assets=assets, dates=previous)
+    weights.index = periods
+    weights.index.name = "Date"
     return weights

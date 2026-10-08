@@ -53,7 +53,44 @@ UNIVERSES: dict[str, str] = {
     "sg": "prices_sg_monthly.csv",
 }
 
+# Ken French data library files (US, monthly, decimals), written by
+# ``python -m goldman.data.fetch factors``.
 FF3_FILENAME = "ff3_monthly.csv"
+FF5_FILENAME = "ff5_monthly.csv"
+MOMENTUM_FILENAME = "momentum_monthly.csv"
+
+# Sorted test portfolios (value-weighted) for the CAPM and factor stages.
+TEST_PORTFOLIOS: dict[str, str] = {
+    "ff25": "ff25_size_bm_monthly.csv",  # 5x5 size x book-to-market
+    "mom10": "ff10_momentum_monthly.csv",  # deciles on prior 12-2 month return
+}
+
+# Stage 4: a second market proxy for Roll's critique — the Ken French
+# developed-markets factors (USD, US T-bill RF), an MSCI World analogue.
+DEVELOPED_FILENAME = "developed_3_factors_monthly.csv"
+
+# Stage 4: investable index proxies (Yahoo adjusted closes of the ETFs, so
+# total returns net of the funds' small expense ratios): the "local index
+# versus MSCI World" pair the handout names.
+INDEX_PROXIES_FILENAME = "index_proxies_monthly.csv"
+INDEX_PROXIES: dict[str, str] = {
+    "SPY": "S&P 500 (SPY ETF)",
+    "URTH": "MSCI World (URTH ETF)",
+}
+
+# Stage 4 long-history robustness: 10 value-weighted industry portfolios since
+# July 1963 (no survivorship: CRSP-wide), with the inputs for their market caps
+# (number of firms x average firm size, $m).  The FF3 file starts in 1926 so the
+# historical equity premium known at each date can serve as the CAPM prior.
+LONG_HISTORY_START = "1963-07-01"
+LONG_FACTORS_START = "1926-07-01"
+LONG_HISTORY: dict[str, str] = {
+    "returns": "long_ind10_vw_monthly.csv",
+    "n_firms": "long_ind10_nfirms_monthly.csv",
+    "avg_size": "long_ind10_avgsize_monthly.csv",
+    "ff3": "long_ff3_monthly.csv",
+    "momentum": "long_momentum_monthly.csv",
+}
 
 # Value-weight files written by goldman.data.fetch, one per named universe.
 # Used as the default comparison portfolio where present.

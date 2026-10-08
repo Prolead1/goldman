@@ -1,22 +1,29 @@
 """Portfolio-construction math.
 
 Implements the mean–variance objects used across the analyses: the tangency
-portfolio ``w ∝ Sigma^{-1} mu_e``, equal/value weighting, and the subsample
-re-estimation that makes estimation error visible.
+portfolio ``w ∝ Sigma^{-1} mu_e`` (unconstrained and long-only), the minimum
+variance portfolio, equal/value weighting, and the subsample re-estimation
+that makes estimation error visible.
 """
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize
 
 __all__ = [
     "excess_means",
+    "excess_returns",
     "tangency_weights",
+    "tangency_weights_long_only",
+    "min_variance_weights",
+    "min_variance_weights_long_only",
     "normalize_weights",
     "equal_weights",
     "subsample_tangency",
     "weight_correlation",
+    "two_fund_allocation",
 ]
 
 
@@ -47,6 +54,58 @@ def tangency_weights(
     raw = np.linalg.solve(cov_array, means_array)
     weights = raw / raw.sum()
     return pd.Series(weights, index=means.index, name="tangency")
+
+
+def _min_quadratic_long_only(
+    cov: np.ndarray,
+    a: np.ndarray,
+    x0: np.ndarray,
+) -> np.ndarray:
+    """Solve ``min x' Sigma x`` s.t. ``a' x = 1, x >= 0`` (a small convex QP)."""
+    result = minimize(
+        lambda x: x @ cov @ x,
+        x0,
+        jac=lambda x: 2.0 * cov @ x,
+        bounds=[(0.0, None)] * len(x0),
+        constraints=[{"type": "eq", "fun": lambda x: a @ x - 1.0, "jac": lambda x: a}],
+        method="SLSQP",
+        options={"ftol": 1e-14, "maxiter": 1000},
+    )
+    if not result.success:  # pragma: no cover - SLSQP on a convex QP
+        raise RuntimeError(f"long-only optimisation failed: {result.message}")
+    return np.clip(result.x, 0.0, None)
+
+
+def min_variance_weights(cov: pd.DataFrame) -> pd.Series:
+    """The global minimum-variance portfolio ``w ∝ Sigma^{-1} 1``."""
+    raw = np.linalg.solve(cov.to_numpy(dtype=float), np.ones(len(cov)))
+    return pd.Series(raw / raw.sum(), index=cov.index, name="min variance")
+
+
+def min_variance_weights_long_only(cov: pd.DataFrame) -> pd.Series:
+    """Minimum variance with no short sales (fully invested)."""
+    sigma = cov.to_numpy(dtype=float)
+    n = len(cov)
+    x = _min_quadratic_long_only(sigma, np.ones(n), np.full(n, 1.0 / n))
+    return pd.Series(x / x.sum(), index=cov.index, name="min variance (long-only)")
+
+
+def tangency_weights_long_only(means: pd.Series, cov: pd.DataFrame) -> pd.Series:
+    """Maximum-Sharpe portfolio with no short sales.
+
+    Solved as ``min y' Sigma y`` s.t. ``mu_e' y = 1, y >= 0`` and ``w = y / 1'y``
+    (the standard reformulation of the max-Sharpe problem).  If no asset has a
+    positive expected excess return no long-only portfolio has a positive
+    Sharpe ratio, and the long-only minimum-variance portfolio is returned.
+    """
+    mu = means.reindex(cov.index).to_numpy(dtype=float)
+    if not (mu > 0).any():
+        return min_variance_weights_long_only(cov).rename("tangency (long-only)")
+    sigma = cov.to_numpy(dtype=float)
+    pos = np.clip(mu, 0.0, None)
+    x0 = pos / (mu @ pos)
+    y = _min_quadratic_long_only(sigma, mu, x0)
+    return pd.Series(y / y.sum(), index=cov.index, name="tangency (long-only)")
 
 
 def normalize_weights(weights: pd.Series) -> pd.Series:
@@ -86,9 +145,17 @@ def subsample_tangency(
     return pd.DataFrame(out)
 
 
+def excess_returns(returns: pd.DataFrame, rf: float | pd.Series) -> pd.DataFrame:
+    """Returns minus the risk-free rate (a scalar or a per-period series)."""
+    if isinstance(rf, pd.Series):
+        return returns.sub(rf.reindex(returns.index), axis=0)
+    return returns - rf
+
+
 def _tangency_for(returns: pd.DataFrame, rf: float | pd.Series) -> pd.Series:
-    means = excess_means(returns, rf)
-    return tangency_weights(means, returns.cov())
+    """Tangency weights from the mean and covariance of *excess* returns."""
+    excess = excess_returns(returns, rf)
+    return tangency_weights(excess.mean(), excess.cov())
 
 
 def _split_label(index: int, n_splits: int) -> str:
@@ -101,3 +168,34 @@ def _split_label(index: int, n_splits: int) -> str:
 def weight_correlation(frame: pd.DataFrame, left: str, right: str) -> float:
     """Correlation between two weight columns — the 0.16-style headline."""
     return float(frame[left].corr(frame[right]))
+
+def two_fund_allocation(
+    market_excess: pd.Series,
+    risk_aversions: tuple[float, ...] = (2.0, 3.0, 5.0, 10.0),
+    periods_per_year: int = 12,
+) -> pd.DataFrame:
+    """The Mutual-Fund Theorem in numbers: how much of the index to hold.
+
+    Every mean–variance investor holds the same risky fund (the market) and
+    splits wealth between it and T-bills: ``y* = premium / (gamma * sigma^2)``
+    for utility ``E[r] - gamma/2 * var``.  The premium is estimated with
+    error, so the share is also shown at the premium plus or minus two
+    standard errors.  Inputs are monthly excess returns; output is annual.
+    """
+    n = int(market_excess.notna().sum())
+    mean = float(market_excess.mean()) * periods_per_year
+    var = float(market_excess.var()) * periods_per_year
+    se = float(market_excess.std()) / np.sqrt(n) * periods_per_year
+    rows = {}
+    for gamma in risk_aversions:
+        rows[gamma] = {
+            "risky share y*": mean / (gamma * var),
+            "y* if premium - 2se": (mean - 2 * se) / (gamma * var),
+            "y* if premium + 2se": (mean + 2 * se) / (gamma * var),
+        }
+    out = pd.DataFrame(rows).T
+    out.index.name = "risk aversion"
+    out.attrs.update(
+        {"premium (ann.)": mean, "vol (ann.)": np.sqrt(var), "premium se (ann.)": se, "months": n}
+    )
+    return out

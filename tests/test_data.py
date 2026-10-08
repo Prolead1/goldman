@@ -15,8 +15,17 @@ from goldman.analysis.portfolio_choice import (
     summary_statistics,
 )
 from goldman.data import (
+    align_excess_returns,
+    load_developed,
+    load_factors,
     load_ff3,
+    load_ff5,
+    load_holding_value_weights,
+    load_index_proxy_returns,
+    load_long_history,
+    load_momentum,
     load_returns,
+    load_test_portfolios,
     monthly_rf,
     prices_to_returns,
     to_period_index,
@@ -157,3 +166,119 @@ def test_run_portfolio_analysis_writes_all_exhibits(tmp_path):
     assert result.output_paths["weights"].suffix == ".png"
     assert -1.0 <= result.weight_correlation <= 1.0
     assert result.most_extreme_weight > 0.0
+
+# ----------------------------------------------- Ken French factors & portfolios
+def _kf_csv(path, columns, values):
+    frame = pd.DataFrame(values, columns=columns)
+    frame.insert(0, "Date", ["2020-01", "2020-02", "2020-03"][: len(frame)])
+    frame.to_csv(path, index=False)
+    return path
+
+
+def test_load_factors_joins_ff3_and_momentum(tmp_path):
+    ff3 = _kf_csv(
+        tmp_path / "ff3.csv",
+        ["Mkt-RF", "SMB", "HML", "RF"],
+        [[0.01, 0.0, 0.0, 0.001], [0.02, 0.0, 0.0, 0.001], [0.03, 0.0, 0.0, 0.001]],
+    )
+    mom = _kf_csv(tmp_path / "mom.csv", ["Mom"], [[0.005], [0.006]])
+    factors = load_factors(ff3_path=ff3, momentum_path=mom)
+    assert list(factors.columns) == ["Mkt-RF", "SMB", "HML", "RF", "Mom"]
+    assert len(factors) == 2  # inner join on the months both cover
+    assert isinstance(factors.index, pd.PeriodIndex)
+
+
+def test_committed_ken_french_files_load():
+    if not config.data_path(config.FF5_FILENAME).exists():
+        pytest.skip("Ken French files not present")
+    ff5 = load_ff5()
+    assert list(ff5.columns) == ["Mkt-RF", "SMB", "HML", "RMW", "CMA", "RF"]
+    assert load_momentum().columns.tolist() == ["Mom"]
+    ff25 = load_test_portfolios("ff25")
+    assert ff25.shape[1] == 25
+    assert ff25.abs().max().max() < 1.0  # decimals, not percent
+    assert load_test_portfolios("mom10").shape[1] == 10
+
+
+def test_load_test_portfolios_rejects_unknown_name(tmp_path):
+    with pytest.raises(KeyError, match="ff25"):
+        load_test_portfolios("industry49")
+    path = _kf_csv(tmp_path / "p.csv", ["P1", "P2"], [[0.01, 0.02]])
+    assert load_test_portfolios("custom", path=path).shape == (1, 2)
+
+
+def test_align_excess_returns_uses_common_months_and_subtracts_rf():
+    returns = pd.DataFrame(
+        {"a": [0.02, 0.03, 0.04]},
+        index=pd.to_datetime(["2020-01-01", "2020-02-01", "2020-03-01"]),
+    )
+    factors = pd.DataFrame(
+        {"Mkt-RF": [0.01, 0.01], "RF": [0.001, 0.002]},
+        index=pd.PeriodIndex(["2020-02", "2020-03"], freq="M"),
+    )
+    excess, aligned = align_excess_returns(returns, factors)
+    assert list(excess.index.astype(str)) == ["2020-02", "2020-03"]
+    assert excess["a"].tolist() == pytest.approx([0.029, 0.038])
+    assert aligned.index.equals(excess.index)
+
+    with pytest.raises(ValueError, match="RF"):
+        align_excess_returns(returns, factors.drop(columns="RF"))
+    later = factors.copy()
+    later.index = pd.PeriodIndex(["2030-01", "2030-02"], freq="M")
+    with pytest.raises(ValueError, match="no months"):
+        align_excess_returns(returns, later)
+
+
+def test_to_period_index_accepts_period_input():
+    frame = pd.DataFrame({"x": [1.0]}, index=pd.PeriodIndex(["2020-01"], freq="M"))
+    assert to_period_index(frame).index.equals(frame.index)
+
+
+# ------------------------------------------------- Stage 4 data (proxy, history)
+def test_load_developed_is_usd_with_us_tbill():
+    if not config.data_path(config.DEVELOPED_FILENAME).exists():
+        pytest.skip("developed-markets file not present")
+    dev = load_developed()
+    ff3 = load_ff3()
+    common = dev.index.intersection(ff3.index)
+    assert {"Mkt-RF", "RF"}.issubset(dev.columns)
+    assert (dev.loc[common, "RF"] - ff3.loc[common, "RF"]).abs().max() < 2e-4
+
+
+def test_load_long_history_aligns_returns_caps_and_factors():
+    if not config.data_path(config.LONG_HISTORY["returns"]).exists():
+        pytest.skip("long-history files not present")
+    hist = load_long_history()
+    assert hist.returns.shape == hist.caps.shape
+    assert hist.returns.index.equals(hist.factors.index)
+    assert str(hist.returns.index[0]) == "1963-07"
+    assert str(hist.factors_full.index[0]) == "1926-07"
+    assert (hist.caps > 0).all().all()
+
+
+def test_load_holding_value_weights_lags_one_month(tmp_path):
+    path = tmp_path / "vw.csv"
+    pd.DataFrame(
+        {
+            "asset": ["a", "b", "a", "b", "a", "b"],
+            "date": [d for d in ("2020-01-01", "2020-02-01", "2020-03-01") for _ in range(2)],
+            "weight": [0.5, 0.5, 0.75, 0.25, 0.1, 0.9],
+        }
+    ).to_csv(path, index=False)
+    months = pd.to_datetime(["2020-02-01", "2020-03-01"])
+    held = load_holding_value_weights(months, path=path)
+    assert isinstance(held.index, pd.PeriodIndex)
+    assert held.loc[pd.Period("2020-02", "M"), "a"] == pytest.approx(0.5)  # January's weights
+    assert held.loc[pd.Period("2020-03", "M"), "a"] == pytest.approx(0.75)  # February's
+
+
+def test_load_index_proxy_returns_labels_and_returns(tmp_path):
+    path = tmp_path / "proxies.csv"
+    pd.DataFrame(
+        {"Date": ["2020-01-01", "2020-02-01", "2020-03-01"], "SPY": [100.0, 110.0, 99.0],
+         "URTH": [50.0, 50.0, 55.0]}
+    ).to_csv(path, index=False)
+    proxies = load_index_proxy_returns(path)
+    assert list(proxies.columns) == list(config.INDEX_PROXIES.values())
+    assert proxies.iloc[0, 0] == pytest.approx(0.10)
+    assert len(proxies) == 2

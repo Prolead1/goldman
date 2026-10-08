@@ -17,6 +17,7 @@ __all__ = [
     "load_prices",
     "prices_to_returns",
     "load_returns",
+    "load_index_proxy_returns",
 ]
 
 
@@ -66,3 +67,13 @@ def load_returns(
     """Convenience loader: prices in, clean monthly returns out."""
     prices = load_prices(path=path, universe=universe, min_obs=min_obs)
     return prices_to_returns(prices, min_obs=min_obs)
+
+def load_index_proxy_returns(path: str | Path | None = None) -> pd.DataFrame:
+    """Monthly total returns of the investable index proxies (S&P 500, MSCI World).
+
+    Columns are renamed to the labels in :data:`goldman.config.INDEX_PROXIES`.
+    """
+    csv_path = Path(path) if path is not None else config.data_path(config.INDEX_PROXIES_FILENAME)
+    prices = _read_price_csv(csv_path)
+    returns = prices.pct_change().dropna(how="all")
+    return returns.rename(columns=config.INDEX_PROXIES)

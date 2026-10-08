@@ -8,7 +8,9 @@ inside each function, so the rest of the package works without it.
 Usage::
 
     uv sync --extra data
-    uv run python -m goldman.data.fetch prices       # prices + FF3 factors
+    uv run python -m goldman.data.fetch prices       # prices + Ken French data
+    uv run python -m goldman.data.fetch factors      # Ken French factors + portfolios only
+    uv run python -m goldman.data.fetch proxies      # S&P 500 + MSCI World ETFs (Stage 4)
     uv run python -m goldman.data.fetch caps         # fetch + build value weights
     uv run python -m goldman.data.fetch caps-fetch   # network -> raw per-ticker cache
     uv run python -m goldman.data.fetch caps-build   # raw cache -> value weights (offline)
@@ -120,28 +122,92 @@ def build_price_universe(tickers: list[str], name: str, report: list[str]) -> No
     )
 
 
-def fetch_ff3(report: list[str]) -> None:
-    """Download the Fama–French 3 factors + RF (monthly, decimals)."""
+# One Ken French dataset per cached CSV: (library name, table index, start,
+# values in percent?).  Table 0 is the monthly series; for the portfolio files
+# it is the value-weighted one.  Firm counts and sizes are not percentages.
+_INDUSTRIES = "10_Industry_Portfolios"  # table 4: number of firms, 5: average size ($m)
+KEN_FRENCH_DATASETS: dict[str, tuple[str, int, str, bool]] = {
+    config.FF3_FILENAME: ("F-F_Research_Data_Factors", 0, START, True),
+    config.FF5_FILENAME: ("F-F_Research_Data_5_Factors_2x3", 0, START, True),
+    config.MOMENTUM_FILENAME: ("F-F_Momentum_Factor", 0, START, True),
+    config.TEST_PORTFOLIOS["ff25"]: ("25_Portfolios_5x5", 0, START, True),
+    config.TEST_PORTFOLIOS["mom10"]: ("10_Portfolios_Prior_12_2", 0, START, True),
+    config.DEVELOPED_FILENAME: ("Developed_3_Factors", 0, START, True),
+    config.LONG_HISTORY["returns"]: (_INDUSTRIES, 0, config.LONG_HISTORY_START, True),
+    config.LONG_HISTORY["n_firms"]: (_INDUSTRIES, 4, config.LONG_HISTORY_START, False),
+    config.LONG_HISTORY["avg_size"]: (_INDUSTRIES, 5, config.LONG_HISTORY_START, False),
+    config.LONG_HISTORY["ff3"]: ("F-F_Research_Data_Factors", 0, config.LONG_FACTORS_START, True),
+    config.LONG_HISTORY["momentum"]: ("F-F_Momentum_Factor", 0, config.LONG_FACTORS_START, True),
+}
+
+
+def fetch_ken_french(report: list[str]) -> None:
+    """Download every Ken French file in one pass (monthly, decimals).
+
+    All files come from the same library vintage, so factors and test
+    portfolios stay consistent with each other.  Ken French marks missing
+    values with -99.99 / -999; those become NaN before rescaling.
+    """
     try:
         from pandas_datareader import data as pdr
+    except Exception as exc:  # noqa: BLE001 - optional extra not installed
+        report.append(f"[ken-french] FAILED: {exc!r} (run `uv sync --extra data`)")
+        return
 
-        ff = pdr.DataReader("F-F_Research_Data_Factors", "famafrench", START, END)[0] / 100.0
-        ff.to_csv(config.DATA_DIR / "ff3_monthly.csv")
-        report.append(f"[ff3] saved {len(ff)} months (Mkt-RF, SMB, HML, RF)")
-    except Exception as exc:  # noqa: BLE001 - manual fallback is documented
+    cache: dict[tuple[str, str], dict] = {}
+    for filename, (dataset, table, start, percent) in KEN_FRENCH_DATASETS.items():
+        try:
+            if (dataset, start) not in cache:
+                cache[(dataset, start)] = pdr.DataReader(dataset, "famafrench", start, END)
+            frame = cache[(dataset, start)][table]
+        except Exception as exc:  # noqa: BLE001 - manual fallback is documented
+            report.append(
+                f"[{dataset}] FAILED: {exc!r} — download the CSV manually from "
+                "Ken French's data library page instead"
+            )
+            continue
+        frame = frame.rename(columns=str.strip).replace([-99.99, -999.0], float("nan"))
+        if percent:
+            frame = frame / 100.0
+        frame.index.name = "Date"
+        frame.to_csv(config.DATA_DIR / filename)
         report.append(
-            f"[ff3] FAILED: {exc!r} — download the CSV manually from "
-            "Ken French's data library page instead"
+            f"[{dataset} table {table}] saved {len(frame)} months x {frame.shape[1]} columns "
+            f"({frame.index[0]} .. {frame.index[-1]}) -> {filename}"
         )
 
 
+def download_index_proxies() -> int:
+    """Fetch the S&P 500 and MSCI World ETFs (monthly adjusted closes)."""
+    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tickers = list(config.INDEX_PROXIES)
+    px = fetch_yfinance(tickers).sort_index()
+    px = px[[t for t in tickers if t in px.columns]]
+    px.to_csv(config.DATA_DIR / config.INDEX_PROXIES_FILENAME)
+    print(
+        f"[proxies] saved {px.shape[1]} of {len(tickers)} tickers, {len(px)} months "
+        f"-> {config.INDEX_PROXIES_FILENAME}"
+    )
+    return 0
+
+
+def download_factors() -> int:
+    """Fetch only the Ken French factors and test portfolios (no prices)."""
+    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    report: list[str] = [f"FE5108 Ken French download, window {START} .. {END}\n"]
+    fetch_ken_french(report)
+    (config.DATA_DIR / "coverage_factors.txt").write_text("\n".join(report) + "\n")
+    print("\n".join(report))
+    return 0
+
+
 def download_prices_and_factors() -> int:
-    """Fetch prices for every universe plus the FF3 factors and a coverage report."""
+    """Fetch prices for every universe plus the Ken French data and a coverage report."""
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     report: list[str] = [f"FE5108 data download, window {START} .. {END}\n"]
     for name, tickers in PRICE_UNIVERSES.items():
         build_price_universe(tickers, name, report)
-    fetch_ff3(report)
+    fetch_ken_french(report)
     (config.DATA_DIR / "coverage_report.txt").write_text("\n".join(report))
     print("\n".join(report))
     print("\nDone. Files are in ./data — post the folder to Canvas as-is.")
@@ -272,10 +338,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "stage",
         nargs="?",
-        choices=["all", "prices", "caps", "caps-fetch", "caps-build"],
+        choices=["all", "prices", "factors", "proxies", "caps", "caps-fetch", "caps-build"],
         default="all",
         help=(
-            "What to fetch: prices (prices + FF3), caps (both market-cap stages), "
+            "What to fetch: prices (prices + Ken French), factors (Ken French only), "
+            "proxies (S&P 500 and MSCI World ETFs), "
+            "caps (both market-cap stages), "
             "caps-fetch (network -> raw cache), caps-build (offline), all (default)."
         ),
     )
@@ -300,6 +368,12 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     if args.stage in {"all", "prices"}:
         download_prices_and_factors()
+    if args.stage in {"all", "proxies"}:
+        download_index_proxies()
+    if args.stage == "proxies":
+        return 0
+    if args.stage == "factors":
+        return download_factors()
     if args.stage == "all":
         return fetch_value_weights(stage="all", pace=args.pace, refresh=args.refresh)
     if args.stage == "caps":
