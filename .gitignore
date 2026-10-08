@@ -15,3 +15,5 @@ outputs/
 .coverage
 coverage.xml
 htmlcov/
+
+.vscode/
