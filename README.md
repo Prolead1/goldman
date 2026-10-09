@@ -155,3 +155,16 @@ when run top to bottom, and doubles as the report. Generated exhibits go to
 `outputs/` (git-ignored; US and SG portfolio exhibits under `outputs/us/` and
 `outputs/sg/`, CAPM exhibits as `capm_<universe>_<proxy>_*`). Package versions
 are pinned in `pyproject.toml` / `uv.lock`.
+
+## Robust inference and sensitivity
+
+Sections 6b–6d of `notebooks/report.ipynb` apply the `robust_inference` and
+`sensitivity` modules to the existing US and Singapore Stage-2/3 models.
+They compare ordinary inference with Newey–West at 0, 3 and 6 monthly lags,
+and summarise the US stock-only subset with factors and dates held fixed.
+The notebook asserts agreement with the original OLS estimates and calendars.
+
+See [ROBUSTNESS_RESULTS.md](ROBUSTNESS_RESULTS.md) for the current interpretation
+and limitations. Re-running the notebook writes tables, sample dates and input
+fingerprints under `outputs/inference_robustness/`. These are individual-alpha
+checks; the existing GRS tests remain classical and are not validated by HAC.
