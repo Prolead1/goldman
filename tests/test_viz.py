@@ -184,3 +184,89 @@ def test_plot_oos_sharpe(tmp_path):
         index=["index", "equal_weight", "unconstrained"],
     )
     _assert_png(viz.plot_oos_sharpe(summary, tmp_path / "sharpe.png"))
+
+
+# ------------------------------------------------------- paired-market panels
+def _two_panels():
+    us, market_us = _panel(seed=0)
+    sg, market_sg = _panel(seed=1)
+    return {"us": us, "sg": sg}, {"us": market_us, "sg": market_sg}
+
+
+def test_plot_paired_portfolio_charts(tmp_path):
+    returns, markets = _two_panels()
+    summaries = {u: summary_statistics(r, rf=0.003) for u, r in returns.items()}
+    weights = {u: tangency_vs_comparison(r, rf=0.003) for u, r in returns.items()}
+    drifts = {u: subsample_tangency(r, rf=0.003) for u, r in returns.items()}
+    _assert_png(
+        viz.plot_correlation_paired(returns, tmp_path / "corr_paired.png")
+    )
+    _assert_png(viz.plot_risk_return_paired(summaries, tmp_path / "risk_paired.png"))
+    _assert_png(viz.plot_weights_paired(weights, tmp_path / "weights_paired.png"))
+    _assert_png(viz.plot_weight_drift_paired(drifts, tmp_path / "drift_paired.png"))
+    assert set(markets) == set(returns)
+
+
+def test_plot_paired_robustness(tmp_path):
+    returns, _ = _two_panels()
+    fixes = {
+        u: run_robustness_analysis(r, rf=0.003, output_dir=tmp_path / u, label=u)
+        for u, r in returns.items()
+    }
+    _assert_png(
+        viz.plot_robustness_paired(
+            {u: fixes[u].weights for u in fixes},
+            {u: fixes[u].diagnostics for u in fixes},
+            tmp_path / "robustness_paired.png",
+        )
+    )
+
+
+def test_plot_paired_capm_charts(tmp_path):
+    returns, markets = _two_panels()
+    tables = {
+        u: security_characteristic_line(returns[u], markets[u], rf=0.0) for u in returns
+    }
+    fits = {u: empirical_sml(tables[u], markets[u]) for u in returns}
+    _assert_png(viz.plot_alpha_intervals_paired(tables, tmp_path / "alpha_paired.png"))
+    _assert_png(viz.plot_sml_paired(tables, fits, tmp_path / "sml_paired.png"))
+
+
+def test_plot_paired_factor_and_oos(tmp_path):
+    index = pd.date_range("2010-01-01", periods=24, freq="MS")
+    factors = {
+        u: pd.DataFrame(
+            {"SMB": np.linspace(-0.02, 0.03, 24), "WML": np.linspace(-0.01, 0.04, 24)},
+            index=index,
+        )
+        for u in ("us", "sg")
+    }
+    growths = {
+        u: pd.DataFrame(
+            {"index": np.linspace(1.0, 1.4, 24), "equal_weight": np.linspace(1.0, 1.2, 24)},
+            index=index,
+        )
+        for u in ("us", "sg")
+    }
+    summaries = {
+        u: pd.DataFrame({"Sharpe": [1.10, 0.90]}, index=["index", "equal_weight"])
+        for u in ("us", "sg")
+    }
+    _assert_png(viz.plot_factor_cumulative_paired(factors, tmp_path / "factors_paired.png"))
+    _assert_png(viz.plot_oos_growth_paired(growths, tmp_path / "growth_paired.png"))
+    _assert_png(viz.plot_oos_sharpe_paired(summaries, tmp_path / "sharpe_paired.png"))
+
+
+def test_plot_index_concentration(tmp_path):
+    index = pd.date_range("2010-01-01", periods=12, freq="MS")
+
+    def panel(k: int) -> pd.DataFrame:
+        base = np.linspace(1.0, float(k), k)
+        values = np.tile(base / base.sum(), (len(index), 1))
+        return pd.DataFrame(values, index=index, columns=[f"a{i}" for i in range(k)])
+
+    _assert_png(
+        viz.plot_index_concentration(
+            {"us": panel(8), "sg": panel(6)}, tmp_path / "concentration.png"
+        )
+    )
