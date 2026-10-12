@@ -1,7 +1,7 @@
 # Robustness results — Kai
 
 Applied to `dev-robustness` using the committed data on 9 October 2026.
-The executable source is `notebooks/report.ipynb`, Sections 6b–6d. This note
+The executable source is `notebooks/report.ipynb`, Section 6 and Appendix A. This note
 is a snapshot of that run, not a separate model implementation.
 
 ## Scope and sample

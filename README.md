@@ -57,8 +57,8 @@ uv run ruff check .
 
 `notebooks/report.ipynb` is **both the written report and the reproducible entry
 point**: it is organised as a report (executive summary, methodology, Stage 1,
-Stage 2, Stage 3, Roll robustness, and the Stage-4 memo, which carries the
-out-of-sample validation and the Roll exhibit) and every table and figure in it
+Stage 2, Stage 3, robustness, and a concise Stage-4 memo, followed by
+appendices with detailed robustness and expanding-window comparisons) and every table and figure in it
 is generated from the committed data when the notebook is run top to bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
 throughout as a cross-market check. Code cells are tagged `hide_input`, so a
 report export can hide them, e.g.
@@ -92,7 +92,7 @@ the `GOLDMAN_ROOT` environment variable if needed.
 | `analysis/factor_construction.py` | Self-built SMB (lagged point-in-time size) and WML (12-1 momentum) long–short spreads | `factor_cumulative_<universe>.png` (US panel plots the downloaded Fama–French SMB/HML) |
 | `analysis/factor_models.py` | Multi-factor SCL regressions; alphas before/after factors on a common sample; joint GRS | `factors_<universe>_alphas.csv`, `..._summary.csv`, `factors_<universe>_<model>_scl.csv`, `factors_<universe>_alpha_comparison.png` |
 | `analysis/robustness.py` | No-short maximum Sharpe, shrinkage of covariance and means, half sample stability, out of sample Sharpe | `robustness_<universe>_diagnostics.csv`, `..._weights.csv`, `robustness_<universe>.png` |
-| `analysis/out_of_sample.py` | Expanding-window walk-forward backtest: re-estimate the index, 1/N and the tangency variants each month, trade the next month; out-of-sample growth and Sharpe | `out_of_sample_<universe>_growth.png`, `out_of_sample_<universe>_sharpe.png` |
+| `analysis/out_of_sample.py` | Expanding-window backtest of estimated variants, plus 1/N and the supplied index series; index timing remains a caveat | `out_of_sample_<universe>_growth.png`, `out_of_sample_<universe>_sharpe.png` |
 | `data/markets.py` | Market proxy `R_M - R_f`: cap-weighted composite or FF `Mkt-RF` | — |
 | `viz.py` | The report's look (seaborn with the QuantumBlack dark theme) and one figure per story beat: correlation, risk/return, weights, drift, robustness, alphas, SML, GRS, proxy comparison, factor growth, alpha comparison | `*.png` exhibits |
 
@@ -125,9 +125,11 @@ in `src/goldman/data/`.
   using value weights.
 - Both universes are **today's members backfilled ten years** — the
   survivorship bias the handout asks you to acknowledge and discuss.
-- Value weights are **point-in-time**: `market cap(t) = split-unadjusted
-  close(t) x shares outstanding(t)`, with shares forward-filled from their
-  report dates, so no month uses a future share count. The weight CSV is long
+- Value weights use historical monthly `market cap(t) = split-unadjusted
+  close(t) x shares outstanding(t)`, with forward-filled reported shares and
+  the early-history approximations described below. Current index returns use
+  these month-end weights on same-month returns; lagged weights are needed
+  before interpreting the series as an implementable benchmark. The weight CSV is long
   format (`asset, date, market_cap, weight`); the chart uses the sample-average
   vector and the full monthly panel is written to `outputs/value_weights.csv`.
 - **Risk-free rates differ by market.** US uses the Fama–French `RF` column;
@@ -158,7 +160,7 @@ are pinned in `pyproject.toml` / `uv.lock`.
 
 ## Robust inference and sensitivity
 
-Sections 6b–6d of `notebooks/report.ipynb` apply the `robust_inference` and
+Section 6 and Appendix A of `notebooks/report.ipynb` apply the `robust_inference` and
 `sensitivity` modules to the existing US and Singapore Stage-2/3 models.
 They compare ordinary inference with Newey–West at 0, 3 and 6 monthly lags,
 and summarise the US stock-only subset with factors and dates held fixed.
@@ -168,3 +170,32 @@ See [ROBUSTNESS_RESULTS.md](ROBUSTNESS_RESULTS.md) for the current interpretatio
 and limitations. Re-running the notebook writes tables, sample dates and input
 fingerprints under `outputs/inference_robustness/`. These are individual-alpha
 checks; the existing GRS tests remain classical and are not validated by HAC.
+
+## Submission requirements (default Track A)
+
+The notebook is the executable evidence source. Its HTML preview is not the
+required submission format. The handout requires a PDF report of at most
+12 pages **including exhibits**, with a one-page executive summary and a
+Stage-4 memo of at most two pages. Appendices may be any length. Detailed
+inference, stocks-only checks and the expanding-window comparison now sit in
+appendices to keep the required four-stage argument prominent.
+
+- Stage 1: compare tangency weights with **value weights on the same universe**.
+- Stage 2: choose and justify a riskless proxy and a market proxy. No named
+  commercial index is mandatory.
+- Stage 3: include at least two factors beyond the market and explain them.
+- Stage 4: recommend an allocation, repeat Stage 2 with a different market
+  proxy, and explain the least-trusted result. Outperforming a benchmark is
+  not a requirement. An out-of-sample horse race is optional under Track A.
+- Robustness is rewarded when it changes a conclusion or demonstrates stability;
+  Section 6 retains that conclusion and sends implementation detail to Appendix A.
+
+Before submission: verify PDF page counts and legibility; add the half-page
+contribution statement signed by every member; complete data/paper references
+and confirm the AI acknowledgment covers the group's actual use; and rerun
+from the cached inputs. The current review does not certify PDF pagination.
+
+The same-month index weights must be lagged and the comparison rerun before
+claiming implementable benchmark performance. The two market proxies should
+also be compared on identical dates to isolate their effect. Current text
+explicitly qualifies both issues; the robustness work does not repair them.
