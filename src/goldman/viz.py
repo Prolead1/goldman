@@ -42,6 +42,17 @@ __all__ = [
     "plot_factor_cumulative",
     "plot_oos_growth",
     "plot_oos_sharpe",
+    "plot_correlation_paired",
+    "plot_risk_return_paired",
+    "plot_weights_paired",
+    "plot_weight_drift_paired",
+    "plot_robustness_paired",
+    "plot_alpha_intervals_paired",
+    "plot_sml_paired",
+    "plot_factor_cumulative_paired",
+    "plot_oos_growth_paired",
+    "plot_oos_sharpe_paired",
+    "plot_index_concentration",
 ]
 
 COLORS = {
@@ -112,6 +123,20 @@ def _save(fig: plt.Figure, output_path: str | Path) -> Path:
     return path
 
 
+def _figure_with_axis(figsize, axis):
+    """Return ``(figure, axis)``, creating a figure only when no axis is given."""
+    if axis is None:
+        return plt.subplots(figsize=figsize)
+    return axis.figure, axis
+
+
+def _finish(fig, output_path, axis):
+    """Save when an output path is given, otherwise hand the axis back."""
+    if output_path is None:
+        return axis
+    return _save(fig, output_path)
+
+
 def _label(name: str, mapping: dict[str, str]) -> str:
     return mapping.get(name, name)
 
@@ -121,14 +146,18 @@ def _color(name: str, index: int) -> str:
 
 
 # --------------------------------------------------------------- data section
-def plot_correlation(returns: pd.DataFrame, output_path: str | Path) -> Path:
+def plot_correlation(
+    returns: pd.DataFrame,
+    output_path: str | Path | None = None,
+    axis: plt.Axes | None = None,
+) -> Path | plt.Axes:
     """Correlation heatmap of the universe."""
     apply_theme()
     correlation = returns.corr()
     mask = np.triu(np.ones_like(correlation, dtype=bool), k=1)
     cmap = sns.diverging_palette(220, 20, sep=20, as_cmap=True)
 
-    fig, axis = plt.subplots(figsize=(9, 7.5))
+    fig, axis = _figure_with_axis((9, 7.5), axis)
     sns.heatmap(
         correlation,
         mask=mask,
@@ -142,14 +171,18 @@ def plot_correlation(returns: pd.DataFrame, output_path: str | Path) -> Path:
     )
     axis.set_title("Monthly return correlations")
     axis.tick_params(labelsize=7)
-    return _save(fig, output_path)
+    return _finish(fig, output_path, axis)
 
 
 # --------------------------------------------------------- Stage 1 portfolio
-def plot_risk_return(summary: pd.DataFrame, output_path: str | Path) -> Path:
+def plot_risk_return(
+    summary: pd.DataFrame,
+    output_path: str | Path | None = None,
+    axis: plt.Axes | None = None,
+) -> Path | plt.Axes:
     """Annualised mean against volatility, coloured by Sharpe."""
     apply_theme()
-    fig, axis = plt.subplots(figsize=(9, 6))
+    fig, axis = _figure_with_axis((9, 6), axis)
     scatter = axis.scatter(
         summary["vol (ann.)"],
         summary["mean (ann.)"],
@@ -173,22 +206,23 @@ def plot_risk_return(summary: pd.DataFrame, output_path: str | Path) -> Path:
     axis.set_xlabel("annualised volatility")
     axis.set_ylabel("annualised mean return")
     axis.set_title("Risk and return across the universe")
-    return _save(fig, output_path)
+    return _finish(fig, output_path, axis)
 
 
 def plot_weights(
     weights: pd.DataFrame,
-    output_path: str | Path,
+    output_path: str | Path | None = None,
     comparison_label: str = "comparison",
     title: str = "Estimated tangency weights versus the index",
-) -> Path:
+    axis: plt.Axes | None = None,
+) -> Path | plt.Axes:
     """Scatter of index weight against tangency weight, one point per asset."""
     apply_theme()
     index_weight = weights["comparison"]
     tangency = weights["tangency"]
     colors = np.where(tangency >= 0, COLORS["long"], COLORS["short"])
 
-    fig, axis = plt.subplots(figsize=(8.5, 7))
+    fig, axis = _figure_with_axis((8.5, 7), axis)
     axis.axhline(0, lw=0.8, color=COLORS["muted"])
     axis.axvline(0, lw=0.8, color=COLORS["muted"])
     axis.scatter(
@@ -212,22 +246,23 @@ def plot_weights(
         plt.Line2D([], [], marker="o", ls="", color=COLORS["short"], label="short"),
     ]
     axis.legend(handles=handles, loc="upper right")
-    return _save(fig, output_path)
+    return _finish(fig, output_path, axis)
 
 
 def plot_weight_drift(
     drift: pd.DataFrame,
-    output_path: str | Path,
+    output_path: str | Path | None = None,
     label: str = "",
     title: str = "Tangency weights across subsamples",
-) -> Path:
+    axis: plt.Axes | None = None,
+) -> Path | plt.Axes:
     """First-half weights against second-half weights, with the identity line."""
     apply_theme()
     x = drift["first half"]
     y = drift["second half"]
     correlation = float(x.corr(y))
 
-    fig, axis = plt.subplots(figsize=(7, 6.5))
+    fig, axis = _figure_with_axis((7, 6.5), axis)
     axis.scatter(x, y, s=55, color=COLORS["long"], edgecolor="white", linewidth=0.4, zorder=3)
     limits = [
         float(min(x.min(), y.min())) - 0.3,
@@ -260,22 +295,23 @@ def plot_weight_drift(
         va="bottom",
         color=COLORS["accent"],
     )
-    return _save(fig, output_path)
+    return _finish(fig, output_path, axis)
 
 
 def plot_robustness(
     weights: pd.DataFrame,
     diagnostics: pd.DataFrame,
-    output_path: str | Path,
+    output_path: str | Path | None = None,
     title: str = "Taming the tangency portfolio",
-) -> Path:
+    axis: plt.Axes | None = None,
+) -> Path | plt.Axes:
     """Every asset weight under each construction, as a jittered strip plot."""
     apply_theme()
     generator = np.random.default_rng(0)
     variants = list(weights.columns)
     positions = np.arange(len(variants))
 
-    fig, axis = plt.subplots(figsize=(9.5, 4.8))
+    fig, axis = _figure_with_axis((9.5, 4.8), axis)
     for position, variant in zip(positions, variants, strict=True):
         values = weights[variant].to_numpy(dtype=float)
         jitter = generator.uniform(-0.18, 0.18, size=len(values))
@@ -303,15 +339,17 @@ def plot_robustness(
         plt.Line2D([], [], marker="o", ls="", color=COLORS["short"], label="short"),
     ]
     axis.legend(handles=handles, loc="upper right")
-    return _save(fig, output_path)
+    return _finish(fig, output_path, axis)
 
 
 # -------------------------------------------------------------- Stage 2 CAPM
+
 def plot_alpha_intervals(
     table: pd.DataFrame,
-    output_path: str | Path,
+    output_path: str | Path | None = None,
     title: str = "Alphas with 95% confidence intervals",
-) -> Path:
+    axis: plt.Axes | None = None,
+) -> Path | plt.Axes:
     """Alpha per asset with its confidence interval, coloured by significance."""
     apply_theme()
     ordered = table.sort_values("alpha")
@@ -319,7 +357,7 @@ def plot_alpha_intervals(
     significant = ordered["p_alpha"] < 0.05
     colors = np.where(significant, COLORS["short"], COLORS["long"])
 
-    fig, axis = plt.subplots(figsize=(8.5, 8))
+    fig, axis = _figure_with_axis((8.5, 8), axis)
     axis.errorbar(
         ordered["alpha"],
         positions,
@@ -344,23 +382,24 @@ def plot_alpha_intervals(
         plt.Line2D([], [], marker="o", ls="", color=COLORS["long"], label="not significant"),
     ]
     axis.legend(handles=handles, loc="lower right")
-    return _save(fig, output_path)
+    return _finish(fig, output_path, axis)
 
 
 def plot_sml(
     table: pd.DataFrame,
     fit,
-    output_path: str | Path,
+    output_path: str | Path | None = None,
     title: str = "Empirical security market line",
     fitted_label: str = "fitted SML",
-) -> Path:
+    axis: plt.Axes | None = None,
+) -> Path | plt.Axes:
     """Average excess return against beta, with fitted and theoretical lines."""
     apply_theme()
     beta = table["beta"].to_numpy()
     mean_excess = table["mean_excess"].to_numpy()
     grid = np.linspace(beta.min() - 0.1, beta.max() + 0.1, 50)
 
-    fig, axis = plt.subplots(figsize=(9, 6))
+    fig, axis = _figure_with_axis((9, 6), axis)
     scatter = axis.scatter(
         beta,
         mean_excess,
@@ -397,7 +436,7 @@ def plot_sml(
     axis.set_ylabel(r"average excess return $\bar{R}_i - \bar{R}_f$")
     axis.set_title(title)
     axis.legend(loc="best")
-    return _save(fig, output_path)
+    return _finish(fig, output_path, axis)
 
 
 def plot_grs(results: dict, output_path: str | Path) -> Path:
@@ -595,12 +634,13 @@ def plot_alpha_comparison(
 
 def plot_factor_cumulative(
     factors: pd.DataFrame,
-    output_path: str | Path,
+    output_path: str | Path | None = None,
     title: str = "Cumulative self-built factor returns",
-) -> Path:
+    axis: plt.Axes | None = None,
+) -> Path | plt.Axes:
     """Cumulative growth of one dollar in each factor, on each factor's sample."""
     apply_theme()
-    fig, axis = plt.subplots(figsize=(9, 5))
+    fig, axis = _figure_with_axis((9, 5), axis)
     for index, name in enumerate(factors.columns):
         series = factors[name].dropna()
         if series.empty:
@@ -617,18 +657,19 @@ def plot_factor_cumulative(
     axis.set_ylabel("cumulative growth of 1 unit")
     axis.set_title(title)
     axis.legend(loc="best")
-    return _save(fig, output_path)
+    return _finish(fig, output_path, axis)
 
 
 # --------------------------------------------------- out-of-sample validation
 def plot_oos_growth(
     growth: pd.DataFrame,
-    output_path: str | Path,
+    output_path: str | Path | None = None,
     title: str = "Out-of-sample growth of 1 unit",
-) -> Path:
+    axis: plt.Axes | None = None,
+) -> Path | plt.Axes:
     """Cumulative growth of each strategy, benchmarks drawn heavier."""
     apply_theme()
-    fig, axis = plt.subplots(figsize=(9.5, 5.2))
+    fig, axis = _figure_with_axis((9.5, 5.2), axis)
     for index, name in enumerate(growth.columns):
         emphasis = name in OOS_EMPHASIS
         axis.plot(
@@ -655,21 +696,22 @@ def plot_oos_growth(
     axis.set_ylabel("growth of 1 unit")
     axis.set_title(title)
     axis.legend(loc="upper left", fontsize=8)
-    return _save(fig, output_path)
+    return _finish(fig, output_path, axis)
 
 
 def plot_oos_sharpe(
     summary: pd.DataFrame,
-    output_path: str | Path,
+    output_path: str | Path | None = None,
     title: str = "Out-of-sample Sharpe by strategy",
-) -> Path:
+    axis: plt.Axes | None = None,
+) -> Path | plt.Axes:
     """Horizontal bars of annualised Sharpe, with the index as the bar to beat."""
     apply_theme()
     ordered = summary["Sharpe"].sort_values()
     positions = np.arange(len(ordered))
     colors = [OOS_COLORS.get(name, COLORS["long"]) for name in ordered.index]
 
-    fig, axis = plt.subplots(figsize=(9, 4.6))
+    fig, axis = _figure_with_axis((9, 4.6), axis)
     axis.barh(positions, ordered.to_numpy(), color=colors, height=0.62, zorder=3)
     for position, (name, value) in zip(positions, ordered.items(), strict=True):
         axis.annotate(
@@ -687,4 +729,204 @@ def plot_oos_sharpe(
     axis.set_yticklabels([_label(name, OOS_LABELS) for name in ordered.index], fontsize=8)
     axis.set_xlabel("annualised Sharpe ratio (out of sample)")
     axis.set_title(title)
+    return _finish(fig, output_path, axis)
+
+
+# ------------------------------------------------------------- paired panels
+def _market_label(name: str) -> str:
+    return MARKET_LABELS.get(name, name.upper())
+
+
+def _paired_panels(mapping, draw, output_path, suptitle, figsize):
+    """One row, one panel per entry: draw each onto its own axis and save once."""
+    apply_theme()
+    fig, axes = plt.subplots(1, 2, figsize=figsize, layout="constrained")
+    for axis, (name, data) in zip(axes, mapping.items(), strict=False):
+        draw(data, axis)
+        axis.set_title(_market_label(name))
+    if suptitle:
+        fig.suptitle(suptitle, fontweight="bold")
+    return _save(fig, output_path)
+
+
+def plot_correlation_paired(returns_by_universe, output_path: str | Path) -> Path:
+    """Correlation heatmaps, one market per panel."""
+    return _paired_panels(
+        returns_by_universe,
+        lambda returns, axis: plot_correlation(returns, axis=axis),
+        output_path,
+        "Monthly return correlations",
+        (14, 6.8),
+    )
+
+
+def plot_risk_return_paired(summaries, output_path: str | Path) -> Path:
+    """Risk-return scatters, one market per panel."""
+    return _paired_panels(
+        summaries,
+        lambda summary, axis: plot_risk_return(summary, axis=axis),
+        output_path,
+        "Risk and return across the universe",
+        (14, 6),
+    )
+
+
+def plot_weights_paired(
+    weights_by_universe,
+    output_path: str | Path,
+    comparison_label: str = "value weights",
+) -> Path:
+    """Tangency-versus-index scatters, one market per panel."""
+    return _paired_panels(
+        weights_by_universe,
+        lambda weights, axis: plot_weights(
+            weights, comparison_label=comparison_label, axis=axis
+        ),
+        output_path,
+        "Estimated tangency weights versus the index",
+        (14, 6.6),
+    )
+
+
+def plot_weight_drift_paired(drifts, output_path: str | Path) -> Path:
+    """Subsample weight scatters, one market per panel."""
+    return _paired_panels(
+        drifts,
+        lambda drift, axis: plot_weight_drift(drift, axis=axis),
+        output_path,
+        "Tangency weights across subsamples",
+        (13, 6.2),
+    )
+
+
+def plot_robustness_paired(
+    weights_by_universe,
+    diagnostics_by_universe,
+    output_path: str | Path,
+) -> Path:
+    """Weight strip plots under each construction, one market per panel."""
+    apply_theme()
+    fig, axes = plt.subplots(1, 2, figsize=(15.5, 5.2), layout="constrained")
+    for axis, name in zip(axes, weights_by_universe, strict=False):
+        plot_robustness(weights_by_universe[name], diagnostics_by_universe[name], axis=axis)
+        axis.set_title(_market_label(name))
+    fig.suptitle("Taming the tangency portfolio", fontweight="bold")
+    return _save(fig, output_path)
+
+
+def plot_alpha_intervals_paired(tables, output_path: str | Path) -> Path:
+    """Alpha confidence-interval charts, one market per panel."""
+    return _paired_panels(
+        tables,
+        lambda table, axis: plot_alpha_intervals(table, axis=axis),
+        output_path,
+        "Alphas with 95% confidence intervals",
+        (15, 8),
+    )
+
+
+def plot_sml_paired(tables, fits, output_path: str | Path) -> Path:
+    """Empirical security market lines, one market per panel."""
+    apply_theme()
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6), layout="constrained")
+    for axis, name in zip(axes, tables, strict=False):
+        plot_sml(tables[name], fits[name], axis=axis)
+        axis.set_title(_market_label(name))
+    fig.suptitle("Empirical security market line", fontweight="bold")
+    return _save(fig, output_path)
+
+
+def plot_factor_cumulative_paired(factors_by_universe, output_path: str | Path) -> Path:
+    """Cumulative factor growth, one market per panel."""
+    return _paired_panels(
+        factors_by_universe,
+        lambda factors, axis: plot_factor_cumulative(factors, axis=axis),
+        output_path,
+        "Cumulative self-built factor returns",
+        (13.5, 5),
+    )
+
+
+def plot_oos_growth_paired(growths, output_path: str | Path) -> Path:
+    """Out-of-sample growth paths, one market per panel."""
+    return _paired_panels(
+        growths,
+        lambda growth, axis: plot_oos_growth(growth, axis=axis),
+        output_path,
+        "Out-of-sample growth of 1 unit",
+        (14.5, 5.2),
+    )
+
+
+def plot_oos_sharpe_paired(summaries, output_path: str | Path) -> Path:
+    """Out-of-sample Sharpe bars, one market per panel."""
+    return _paired_panels(
+        summaries,
+        lambda summary, axis: plot_oos_sharpe(summary, axis=axis),
+        output_path,
+        "Out-of-sample Sharpe by strategy",
+        (14.5, 4.6),
+    )
+
+
+def plot_index_concentration(
+    weights_by_universe,
+    output_path: str | Path,
+    title: str = "The index is a concentrated portfolio, not a broad average",
+) -> Path:
+    """Two views of value-weight concentration, both markets in one image.
+
+    Left: the concentration curve, the cumulative share of the index held by
+    the ``k`` largest names, averaged over the sample.  A straight diagonal is
+    what a genuinely broad index would look like; the farther above it the curve
+    sits, the more the return depends on a handful of names.  Right: the top-five
+    share through time, showing the concentration is persistent rather than a
+    single-month accident.
+    """
+    apply_theme()
+    fig, (left, right) = plt.subplots(1, 2, figsize=(13.5, 5), layout="constrained")
+
+    largest = max(len(weights.columns) for weights in weights_by_universe.values())
+    for index, (name, weights) in enumerate(weights_by_universe.items()):
+        color = _color(name, index)
+        label = _market_label(name)
+        average = weights.mean().sort_values(ascending=False)
+        cumulative = average.cumsum() / average.sum()
+        ranks = np.arange(1, len(cumulative) + 1)
+        left.plot(ranks, cumulative.to_numpy(), marker="o", ms=3, lw=2.0, color=color, label=label)
+        top_five = float(average.nlargest(5).sum() / average.sum())
+        left.annotate(
+            f"{label}: top five = {top_five:.0%}",
+            (5, float(cumulative.iloc[4])),
+            xytext=(12, 9 if index == 0 else -20),
+            textcoords="offset points",
+            fontsize=8,
+            color=color,
+        )
+        top_five_series = weights.apply(lambda row: row.nlargest(5).sum(), axis=1)
+        right.plot(
+            top_five_series.index, top_five_series.to_numpy(), lw=1.8, color=color, label=label
+        )
+
+    left.plot(
+        [1, largest],
+        [1.0 / largest, 1.0],
+        ls="--",
+        lw=1.2,
+        color=COLORS["muted"],
+        label="equal weight",
+    )
+    left.axvline(5, ls=":", lw=1.1, color=COLORS["accent"])
+    left.set_xlabel("number of holdings, largest first")
+    left.set_ylabel("cumulative share of the index")
+    left.set_title("Concentration curve")
+    left.legend(loc="lower right", fontsize=8)
+
+    right.axhline(0.5, ls="--", lw=1.0, color=COLORS["muted"])
+    right.set_ylim(0.0, 1.0)
+    right.set_ylabel("top-five share of the index")
+    right.set_title("Top-five weight through time")
+    right.legend(loc="lower right", fontsize=8)
+
+    fig.suptitle(title, fontweight="bold")
     return _save(fig, output_path)

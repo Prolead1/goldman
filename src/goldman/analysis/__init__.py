@@ -39,6 +39,13 @@ from .factor_models import (
     model_summary,
     run_factor_analysis,
 )
+from .out_of_sample import (
+    OOS_BENCHMARKS,
+    OutOfSampleResult,
+    out_of_sample_summary,
+    run_out_of_sample_analysis,
+    walk_forward_returns,
+)
 from .portfolio import (
     equal_weights,
     excess_means,
@@ -53,13 +60,6 @@ from .portfolio_choice import (
     run_portfolio_analysis,
     summary_statistics,
     tangency_vs_comparison,
-)
-from .out_of_sample import (
-    OOS_BENCHMARKS,
-    OutOfSampleResult,
-    out_of_sample_summary,
-    run_out_of_sample_analysis,
-    walk_forward_returns,
 )
 from .robustness import (
     VARIANTS,
