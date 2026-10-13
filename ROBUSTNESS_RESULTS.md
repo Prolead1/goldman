@@ -1,6 +1,7 @@
 # Robustness results — Kai
 
-Applied to `dev-robustness` using the committed data on 9 October 2026.
+Re-run on `dev-robustness` on 13 October 2026 after merging main at `5b3243f`.
+Uses the merged notebook, its paired-market exhibits, and the committed data.
 The executable source is `notebooks/report.ipynb`, Section 6 and Appendix A. This note
 is a snapshot of that run, not a separate model implementation.
 

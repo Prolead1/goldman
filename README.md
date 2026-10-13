@@ -35,6 +35,8 @@ swapping the market proxy is a single argument.
 │   │   ├── factor_construction.py  # self-built size (SMB) and momentum (WML)
 │   │   ├── factor_models.py    # multi-factor regressions, alpha comparison
 │   │   ├── robustness.py       # no-short and shrinkage variants
+│   │   ├── robust_inference.py  # ordinary and Newey-West regression inference
+│   │   ├── sensitivity.py       # lag-choice and stocks-only comparisons
 │   │   └── out_of_sample.py    # expanding-window walk-forward validation
 │   ├── viz.py                  # shared theme (seaborn + qbstyles) and figures
 │   └── __init__.py             # public API
@@ -58,7 +60,8 @@ uv run ruff check .
 `notebooks/report.ipynb` is **both the written report and the reproducible entry
 point**: it is organised as a report (executive summary, methodology, Stage 1,
 Stage 2, Stage 3, robustness, and a concise Stage-4 memo, followed by
-appendices with detailed robustness and expanding-window comparisons) and every table and figure in it
+appendices with detailed robustness, expanding-window comparisons and
+index concentration) and every table and figure in it
 is generated from the committed data when the notebook is run top to bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
 throughout as a cross-market check. Code cells are tagged `hide_input`, so a
 report export can hide them, e.g.
