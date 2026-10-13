@@ -12,6 +12,8 @@ Usage::
     uv run python -m goldman.data.fetch caps         # fetch + build value weights
     uv run python -m goldman.data.fetch caps-fetch   # network -> raw per-ticker cache
     uv run python -m goldman.data.fetch caps-build   # raw cache -> value weights (offline)
+    uv run python -m goldman.data.fetch sg-daily     # network -> SG daily raw cache + FX
+    uv run python -m goldman.data.fetch sg-build     # SG daily cache -> clean SG files (offline)
     uv run python -m goldman.data.fetch all          # everything
 
 Market caps are point-in-time: ``split-unadjusted close(t) x shares(t)`` with
@@ -25,7 +27,12 @@ Design notes
 * Market caps: one pass per ticker (prices + shares together) into a raw cache
   under ``data/raw/<universe>/``; ``caps-build`` is offline and
   repeatable.  ``--refresh`` re-pulls, ``--pace`` controls politeness.
-* Prices are Yahoo's adjusted close (splits + dividends) — a total-return proxy.
+* US prices are Yahoo's adjusted close (splits + dividends) — a total-return
+  proxy that passed our audit against raw closes plus dividends.
+* SG prices are *not* Yahoo's adjusted close, which is wrong for several SGX
+  names (see ``goldman.data.cleaning``).  ``sg-daily`` caches Yahoo's daily
+  close and dividends next to SGX's own unadjusted last-traded price, and
+  ``sg-build`` rebuilds total returns and market caps from that cache offline.
 * The SG list is "approximately the STI": verify current membership before
   relying on the value-weight comparison.
 """
@@ -39,6 +46,7 @@ from pathlib import Path
 import pandas as pd
 
 from .. import config
+from .cleaning import build_sg_clean
 from .market_caps import build_value_weights_from_raw, unadjust_close
 
 __all__ = ["main"]
@@ -235,7 +243,14 @@ def fetch_cap_universe(name: str, filename: str, *, pace: float, refresh: bool) 
 
 
 def build_cap_universe(name: str) -> None:
-    """Convert the raw cache for a universe into its long-format weight CSV."""
+    """Convert the raw cache for a universe into its long-format weight CSV.
+
+    Singapore weights come from :func:`build_sg` instead: Yahoo's scaled
+    close and glitched share counts make the plain raw-cache caps wrong there.
+    """
+    if name == "sg":
+        build_sg()
+        return
     path = config.DATA_DIR / f"prices_{name}_monthly.csv"
     assets = read_prices(path).columns if path.exists() else None
     long = build_value_weights_from_raw(name, assets=assets)
@@ -266,17 +281,130 @@ def fetch_value_weights(
     return 0
 
 
+# ------------------------------------------------------------ SG daily cache
+SGX_HISTORY_URL = "https://api.sgx.com/securities/v1.1/charts/historic/{kind}/code/{code}/all"
+SGX_KINDS = ("stocks", "reits")  # REITs are served under their own path
+FX_TICKER = "SGD=X"  # Yahoo's USD/SGD rate: SGD per USD
+
+
+def fetch_sgx_history(code: str) -> pd.DataFrame:
+    """SGX's own daily last-traded price for one stock code, never adjusted.
+
+    The SGX website's historical-price service returns every session since
+    2011, under ``stocks`` for companies and ``reits`` for REITs (the
+    ``stocks`` path holds only a fragment of a REIT's history), so the longer
+    of the two is kept.  Some days appear more than once (one row per
+    snapshot); the latest snapshot of each day is kept.
+    """
+    import requests  # installed with yfinance (the ``data`` extra)
+
+    histories = []
+    for kind in SGX_KINDS:
+        response = requests.get(
+            SGX_HISTORY_URL.format(kind=kind, code=code),
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=60,
+        )
+        response.raise_for_status()
+        histories.append(response.json()["data"]["historic"])
+    frame = pd.DataFrame(max(histories, key=len))
+    frame["date"] = pd.to_datetime(frame["trading_time"].str[:8])
+    frame = frame.sort_values("trading_time").groupby("date").last()
+    return pd.DataFrame(
+        {"sgx_close": frame["lt"].astype(float), "currency": frame["cur"]},
+        index=frame.index,
+    )
+
+
+def fetch_sg_daily_ticker(ticker: str, start: str, end: str) -> pd.DataFrame:
+    """Yahoo's daily close and dividends side by side with SGX's raw price.
+
+    ``close`` is Yahoo's ``Close`` with ``auto_adjust=False``: split- and
+    capital-adjusted, never dividend-adjusted.  ``dividend`` and ``split`` are
+    Yahoo's corporate-action columns and ``adj_close`` its total-return series
+    (kept only so the cleaning report can show what changed).  ``sgx_close``
+    is the exchange's own unadjusted last-traded price for the same day.
+    """
+    import yfinance as yf
+
+    history = yf.Ticker(ticker).history(start=start, end=end, auto_adjust=False, actions=True)
+    if history.empty:
+        raise ValueError(f"No Yahoo history for {ticker}")
+    index = pd.DatetimeIndex(history.index).tz_localize(None).normalize()
+    frame = pd.DataFrame(
+        {
+            "close": history["Close"].to_numpy(),
+            "adj_close": history["Adj Close"].to_numpy(),
+            "dividend": history["Dividends"].to_numpy(),
+            "split": history["Stock Splits"].to_numpy(),
+        },
+        index=index,
+    )
+    sgx = fetch_sgx_history(ticker.removesuffix(".SI"))
+    frame = frame.join(sgx, how="left")
+    frame.index.name = "date"
+    return frame
+
+
+def fetch_fx(start: str, end: str) -> pd.Series:
+    """Month-end USD/SGD (SGD per USD), labelled by month start like the prices."""
+    import yfinance as yf
+
+    history = yf.Ticker(FX_TICKER).history(start=start, end=end, interval="1mo")
+    index = pd.DatetimeIndex(history.index).tz_localize(None).normalize()
+    return pd.Series(history["Close"].to_numpy(), index=index, name="usdsgd")
+
+
+def fetch_sg_daily(*, pace: float = 0.5, refresh: bool = False) -> int:
+    """Fill the SG daily raw cache (Yahoo + SGX) and the USD/SGD series."""
+    out_dir = config.RAW_DIR / "sg_daily"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    start = (pd.Timestamp(START) - pd.DateOffset(months=3)).strftime("%Y-%m-%d")
+    for ticker in TICKERS_SG:
+        path = out_dir / f"{ticker}.csv"
+        if path.exists() and not refresh:
+            print(f"  {ticker:9s} cached")
+            continue
+        try:
+            frame = fetch_sg_daily_ticker(ticker, start, END)
+        except Exception as exc:  # noqa: BLE001 - report and keep going
+            print(f"  {ticker:9s} FAILED ({exc!r})")
+            continue
+        frame.to_csv(path)
+        n_sgx = int(frame["sgx_close"].notna().sum())
+        print(f"  {ticker:9s} {len(frame):5d} days, {n_sgx:5d} with an SGX price")
+        time.sleep(pace)
+
+    fx_dir = config.RAW_DIR / "fx"
+    fx_dir.mkdir(parents=True, exist_ok=True)
+    fx = fetch_fx(start, END)
+    fx.rename_axis("date").to_csv(fx_dir / "usdsgd_monthly.csv")
+    print(f"[fx] {len(fx)} months of USD/SGD -> {fx_dir / 'usdsgd_monthly.csv'}")
+    return 0
+
+
+def build_sg() -> int:
+    """Rebuild the clean SG prices, value weights and cleaning report (offline)."""
+    result = build_sg_clean()
+    result.prices.to_csv(config.DATA_DIR / "prices_sg_monthly.csv")
+    result.value_weights.to_csv(config.DATA_DIR / "value_weights_sg.csv", index=False)
+    (config.DATA_DIR / "cleaning_report_sg.txt").write_text(result.report)
+    print(result.report)
+    return 0
+
+
 # ------------------------------------------------------------------- CLI
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="goldman.data.fetch", description=__doc__)
     parser.add_argument(
         "stage",
         nargs="?",
-        choices=["all", "prices", "caps", "caps-fetch", "caps-build"],
+        choices=["all", "prices", "caps", "caps-fetch", "caps-build", "sg-daily", "sg-build"],
         default="all",
         help=(
             "What to fetch: prices (prices + FF3), caps (both market-cap stages), "
-            "caps-fetch (network -> raw cache), caps-build (offline), all (default)."
+            "caps-fetch (network -> raw cache), caps-build (offline), "
+            "sg-daily (network -> SG daily cache), sg-build (offline), all (default)."
         ),
     )
     parser.add_argument(
@@ -301,7 +429,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.stage in {"all", "prices"}:
         download_prices_and_factors()
     if args.stage == "all":
+        # The SG daily cache must exist before the cap build, which for SG
+        # rebuilds the clean prices and weights from it.
+        fetch_sg_daily(pace=args.pace, refresh=args.refresh)
         return fetch_value_weights(stage="all", pace=args.pace, refresh=args.refresh)
+    if args.stage == "sg-daily":
+        return fetch_sg_daily(pace=args.pace, refresh=args.refresh)
+    if args.stage == "sg-build":
+        return build_sg()
     if args.stage == "caps":
         return fetch_value_weights(
             stage="all", universe=args.universe, pace=args.pace, refresh=args.refresh
