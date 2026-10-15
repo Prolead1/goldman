@@ -34,6 +34,7 @@ swapping the market proxy is a single argument.
 │   │   ├── portfolio_choice.py # summary stats, weight chart, subsample drift
 │   │   ├── capm.py             # SCL regressions, empirical SML, GRS test
 │   │   ├── factor_construction.py  # self-built size (SMB) and momentum (WML)
+│   │   ├── custom_factors.py   # 52-week high + vol-managed momentum, scorecard
 │   │   ├── factor_models.py    # multi-factor regressions, alpha comparison
 │   │   ├── robustness.py       # no-short and shrinkage variants
 │   │   └── out_of_sample.py    # expanding-window walk-forward validation
@@ -106,6 +107,7 @@ the `GOLDMAN_ROOT` environment variable if needed.
 | `analysis/portfolio_choice.py` | Annualised summary statistics; the tangency portfolio `w ∝ Σ⁻¹μ_e`; comparison (value/1/N) weights; full- vs subsample re-estimation | `summary_stats.csv`, `tangency_weights.png`, `value_weights.csv`, `subsample_weights.csv` |
 | `analysis/capm.py` | Per-asset `α̂, β̂, t(α̂), R²`; the empirical vs theoretical SML; the GRS joint alpha test | `capm_<universe>_<proxy>_scl.csv`, `..._sml.png`, `..._summary.txt` |
 | `analysis/factor_construction.py` | Self-built SMB (lagged point-in-time size) and WML (12-1 momentum) long–short spreads | `factor_cumulative_<universe>.png` (US panel plots the downloaded Fama–French SMB/HML) |
+| `analysis/custom_factors.py` | Two custom factors run on both markets: 52-week high (NEAR52, George and Hwang 2004) and volatility-managed momentum (VWML, Barroso and Santa-Clara 2015); scorecard (Sharpe, CAPM alpha, drawdown, turnover, break-even cost) and spanning regressions | `custom_factor_growth_paired.png`, `custom_factor_scorecard.png` |
 | `analysis/factor_models.py` | Multi-factor SCL regressions; alphas before/after factors on a common sample; joint GRS | `factors_<universe>_alphas.csv`, `..._summary.csv`, `factors_<universe>_<model>_scl.csv`, `factors_<universe>_alpha_comparison.png` |
 | `analysis/robustness.py` | No-short maximum Sharpe, shrinkage of covariance and means, half sample stability, out of sample Sharpe | `robustness_<universe>_diagnostics.csv`, `..._weights.csv`, `robustness_<universe>.png` |
 | `analysis/out_of_sample.py` | Expanding-window walk-forward backtest: re-estimate the index, 1/N and the tangency variants each month, trade the next month; out-of-sample growth and Sharpe | `out_of_sample_<universe>_growth.png`, `out_of_sample_<universe>_sharpe.png` |

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from . import (
     capm,
+    custom_factors,
     factor_construction,
     factor_models,
     out_of_sample,
@@ -25,9 +26,17 @@ from .capm import (
     run_capm_analysis,
     security_characteristic_line,
 )
+from .custom_factors import (
+    build_custom_factors,
+    factor_scorecard,
+    near_high_signal,
+    spanning_regression,
+    volatility_scale,
+)
 from .factor_construction import (
     build_self_factors,
     long_short_spread,
+    long_short_weights,
     momentum_factor,
     momentum_signal,
     size_factor,
@@ -78,6 +87,13 @@ from .robustness import (
 
 __all__ = [
     "capm",
+    "custom_factors",
+    "build_custom_factors",
+    "factor_scorecard",
+    "near_high_signal",
+    "spanning_regression",
+    "volatility_scale",
+    "long_short_weights",
     "factor_construction",
     "factor_models",
     "portfolio",
