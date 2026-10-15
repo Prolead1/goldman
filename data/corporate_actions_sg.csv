@@ -1,0 +1,20 @@
+# Corporate-action corrections for the Singapore universe, read by goldman.data.cleaning.
+# kind=spinoff: large distribution in specie. Ex-date return rebuilt as
+#   (SGX ex price + cash dividend + ratio * distributed_price) / SGX cum price,
+#   and dividends before the ex-date put on Yahoo's scaled-close basis.
+# kind=distribution: small distribution in specie. Yahoo's price factor is kept
+#   (its error is a few basis points); dividends before the ex-date are rescaled.
+# kind=shares_carry: Yahoo share count between start and end replaced by the last
+#   count before start.
+# CA numbers are SGX corporate-action records: https://links.sgx.com/1.0.0/corporate-actions/<CA>
+# Prices are SGX last-traded prices from the SGX website's historical-price service.
+ticker,ex_date,kind,ratio,distributed,distributed_price,start,end,source
+U96.SI,2020-09-09,spinoff,4.911,Sembcorp Marine (S51),0.190,,,SGX CA 620550: 4.911 SCM per share; SCM SGX close 2020-09-09 S$0.190
+BS6.SI,2022-04-22,spinoff,1,Yangzijiang Financial (YF8),0.620,,,SGX CA 1111215: 1 YZJFH per share; first YF8 SGX close 2022-04-28 S$0.620
+BN4.SI,2023-02-23,spinoff,19.085,Sembcorp Marine (S51),0.128,,,SGX CA 1343330: 19.085 SCM per share; SCM SGX close 2023-02-23 S$0.128
+C09.SI,2022-05-04,distribution,0.159,CDL Hospitality Trusts (J85),,,,SGX CA 1117897: 0.159 CDLHT per share (S$0.20 per share per CDL)
+BN4.SI,2023-10-25,distribution,0.2,Keppel REIT (K71U),,,,SGX CA 1517826: 1 KREIT unit per 5 shares
+BN4.SI,2026-04-27,distribution,0.1111,Keppel REIT (K71U),,,,SGX CA 2189552: 1 KREIT unit per 9 shares (about S$0.11 per share per Keppel) plus S$0.02 cash
+9CI.SI,2023-04-28,distribution,0.057,CapitaLand Ascott Trust (HMN),,,,SGX CA 1390139: 0.057 CLAS per share
+U11.SI,,shares_carry,,,,2017-03-01,2017-03-01,Yahoo share count drops to 0.7% of its neighbours for one month
+J36.SI,,shares_carry,,,,2019-07-01,2022-05-01,Yahoo switches to a count incl. the Jardine Strategic cross-holding and oscillates; back to 0.3bn from 2022-06
