@@ -28,6 +28,7 @@ __all__ = [
     "value_weights_from_market_caps",
     "value_weights_from_raw",
     "build_value_weights_from_raw",
+    "long_value_weights",
     "load_value_weights",
 ]
 
@@ -151,7 +152,15 @@ def build_value_weights_from_raw(
     if not caps:
         raise ValueError(f"No usable market-cap data in {raw_dir}.")
 
-    cap_panel = pd.DataFrame(caps).sort_index()
+    return long_value_weights(pd.DataFrame(caps).sort_index())
+
+
+def long_value_weights(cap_panel: pd.DataFrame) -> pd.DataFrame:
+    """Turn a date-by-asset market-cap panel into the long weight CSV layout.
+
+    Returns columns ``asset, date, market_cap, weight`` with the weight
+    normalised within each date over the names that have a cap then.
+    """
     weights = value_weights_from_market_caps(cap_panel)
 
     def _long(panel: pd.DataFrame, value_name: str) -> pd.DataFrame:

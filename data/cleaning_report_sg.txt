@@ -1,0 +1,57 @@
+Singapore data cleaning report (goldman.data.cleaning.build_sg_clean)
+
+Returns: Yahoo daily close + dividends, dividends rescaled before each
+distribution in specie, spin-off ex-dates rebuilt from SGX prices.
+Market caps: SGX unadjusted month-end price x point-in-time shares.
+Converted from USD to SGD at month-end USD/SGD: D01.SI, H78.SI, J36.SI.
+
+Per-ticker comparison with Yahoo's adjusted close (local currency):
+        currency  months  growth Yahoo adj (local)  growth clean (local)  max monthly gap  months gap > 1%
+ticker                                                                                                    
+9CI.SI       SGD      60                    0.9728                0.9723           0.0008                0
+A17U.SI      SGD     120                    1.7119                1.7129           0.0007                0
+AJBU.SI      SGD     120                    2.9135                2.9138           0.0005                0
+BN4.SI       SGD     120                    5.7293                4.7430           0.0602                9
+BS6.SI       SGD     120                   20.8301               16.1835           0.1007                6
+BUOU.SI      SGD     120                    1.7321                1.7303           0.0035                0
+C07.SI       SGD     120                    0.8859                0.9374           0.0099                0
+C09.SI       SGD     120                    1.1864                1.1840           0.0007                0
+C38U.SI      SGD     120                    1.8176                1.8149           0.0006                0
+C52.SI       SGD     120                    0.7233                0.7239           0.0012                0
+C6L.SI       SGD     120                    1.2878                1.2934           0.0029                0
+D01.SI       USD     120                    0.8356                0.8317           0.0040                0
+D05.SI       SGD     120                    9.0908                9.1063           0.0011                0
+F34.SI       SGD     120                    1.7335                1.7345           0.0006                0
+G13.SI       SGD     120                    1.2200                1.2212           0.0004                0
+H78.SI       USD     120                    1.7758                1.7734           0.0015                0
+J36.SI       USD     120                    1.4049                1.4037           0.0012                0
+M44U.SI      SGD     120                    1.9101                1.9090           0.0004                0
+ME8U.SI      SGD     120                    1.9267                1.9257           0.0004                0
+N2IU.SI      SGD     120                    1.3618                1.3618           0.0006                0
+O39.SI       SGD     120                    5.7794                5.7880           0.0004                0
+S58.SI       SGD     120                    0.9728                0.9724           0.0003                0
+S63.SI       SGD     120                    4.8905                4.8967           0.0005                0
+S68.SI       SGD     120                    4.7929                4.7959           0.0003                0
+U11.SI       SGD     120                    3.5247                3.5321           0.0012                0
+U14.SI       SGD     120                    2.0641                2.0610           0.0007                0
+U96.SI       SGD     120                    6.3383                5.3327           0.1344                3
+V03.SI       SGD     120                    2.9785                2.9840           0.0010                0
+Y92.SI       SGD     120                  286.6832                0.6651           1.5910               14
+Z74.SI       SGD     120                    1.7774                1.7829           0.0011                0
+
+Corrections applied:
+9CI.SI: distribution 2023-04-28, Yahoo factor 0.9841; 2023-04 return +6.0% (Yahoo) -> +6.0% (clean) (SGX CA 1390139: 0.057 CLAS per share)
+BN4.SI: spinoff 2023-02-23, Yahoo factor 0.6513; 2023-02 return +11.4% (Yahoo) -> +5.4% (clean) (SGX CA 1343330: 19.085 SCM per share; SCM SGX close 2023-02-23 S$0.128)
+BN4.SI: distribution 2023-10-25, Yahoo factor 0.9750; 2023-10 return -6.3% (Yahoo) -> -6.3% (clean) (SGX CA 1517826: 1 KREIT unit per 5 shares)
+BN4.SI: distribution 2026-04-27, Yahoo factor 0.9914; 2026-04 return -5.9% (Yahoo) -> -5.9% (clean) (SGX CA 2189552: 1 KREIT unit per 9 shares (about S$0.11 per share per Keppel) plus S$0.02 cash)
+BS6.SI: spinoff 2022-04-22, Yahoo factor 0.5519; 2022-04 return +7.8% (Yahoo) -> -2.3% (clean) (SGX CA 1111215: 1 YZJFH per share; first YF8 SGX close 2022-04-28 S$0.620)
+C09.SI: distribution 2022-05-04, Yahoo factor 0.9751; 2022-05 return +0.3% (Yahoo) -> +0.3% (clean) (SGX CA 1117897: 0.159 CDLHT per share (S$0.20 per share per CDL))
+J36.SI: share count 2019-07..2022-05 carried forward (Yahoo switches to a count incl. the Jardine Strategic cross-holding and oscillates; back to 0.3bn from 2022-06)
+U11.SI: share count 2017-03..2017-03 carried forward (Yahoo share count drops to 0.7% of its neighbours for one month)
+U96.SI: spinoff 2020-09-09, Yahoo factor 0.5038; 2020-09 return +42.2% (Yahoo) -> +28.8% (clean) (SGX CA 620550: 4.911 SCM per share; SCM SGX close 2020-09-09 S$0.190)
+
+Clean monthly returns beyond +/-30% (check each is a real move):
+Date              
+2016-11-01  G13.SI    0.3224
+2019-08-01  BS6.SI   -0.3636
+2020-11-01  S58.SI    0.3893

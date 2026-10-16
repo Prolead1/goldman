@@ -27,6 +27,7 @@ swapping the market proxy is a single argument.
 │   │   ├── rates.py            # universe-aware risk-free rates
 │   │   ├── markets.py          # market proxies (value-weighted / FF market)
 │   │   ├── market_caps.py      # point-in-time value weights (price x shares)
+│   │   ├── cleaning.py         # SG total returns + caps rebuilt from SGX data
 │   │   └── fetch.py            # explicit, network-only fetchers (not imported)
 │   ├── analysis/               # portfolio construction and exhibits
 │   │   ├── portfolio.py        # tangency weights, 1/N, subsample re-estimation
@@ -35,16 +36,18 @@ swapping the market proxy is a single argument.
 │   │   ├── factor_construction.py  # self-built size (SMB) and momentum (WML)
 │   │   ├── factor_models.py    # multi-factor regressions, alpha comparison
 │   │   ├── robustness.py       # no-short and shrinkage variants
-│   │   ├── robust_inference.py  # ordinary and Newey-West regression inference
-│   │   ├── sensitivity.py       # lag-choice and stocks-only comparisons
 │   │   └── out_of_sample.py    # expanding-window walk-forward validation
 │   ├── viz.py                  # shared theme (seaborn + qbstyles) and figures
 │   └── __init__.py             # public API
 ├── notebooks/
 │   └── report.ipynb            # the report + reproducible entry point
 ├── tests/                      # pytest suite for the math and loaders
+├── scripts/
+│   └── audit_yahoo_prices.py   # network check of the price files vs raw Yahoo data
 ├── data/                       # raw cached CSVs (committed)
-│   └── raw/<universe>/        # per-ticker prices + shares cache
+│   ├── raw/<universe>/        # per-ticker prices + shares cache
+│   ├── raw/sg_daily/          # SG daily cache: Yahoo close/dividends + SGX price
+│   └── raw/fx/                # month-end USD/SGD
 └── outputs/                    # generated exhibits (git-ignored)
 ```
 
@@ -59,9 +62,8 @@ uv run ruff check .
 
 `notebooks/report.ipynb` is **both the written report and the reproducible entry
 point**: it is organised as a report (executive summary, methodology, Stage 1,
-Stage 2, Stage 3, robustness, and a concise Stage-4 memo, followed by
-appendices with detailed robustness, expanding-window comparisons and
-index concentration) and every table and figure in it
+Stage 2, Stage 3, Roll robustness, and the Stage-4 memo, which carries the
+out-of-sample validation and the Roll exhibit) and every table and figure in it
 is generated from the committed data when the notebook is run top to bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
 throughout as a cross-market check. Code cells are tagged `hide_input`, so a
 report export can hide them, e.g.
@@ -74,8 +76,19 @@ only when invoked — nothing imports them:
 uv sync --extra data
 uv run python -m goldman.data.fetch prices       # prices + FF3 factors
 uv run python -m goldman.data.fetch caps         # fetch + build value weights
+uv run python -m goldman.data.fetch sg-daily     # SG daily cache (Yahoo + SGX) + USD/SGD
+uv run python -m goldman.data.fetch sg-build     # offline: clean SG prices + weights
 uv run python -m goldman.data.fetch all          # everything
 ```
+
+The Singapore files are not Yahoo's adjusted closes (see *Singapore data
+cleaning* below). `sg-daily` caches Yahoo's daily close and dividends next to
+SGX's own unadjusted last-traded price, and `sg-build` (offline, repeatable)
+rebuilds `data/prices_sg_monthly.csv`, `data/value_weights_sg.csv` and
+`data/cleaning_report_sg.txt` from that cache and `data/corporate_actions_sg.csv`.
+A test checks that the committed files reproduce from the cache exactly.
+`uv run python scripts/audit_yahoo_prices.py` re-runs the audit against live
+Yahoo data.
 
 Market caps run in two stages so the network is hit once per ticker: `caps-fetch`
 pulls prices + shares outstanding into `data/raw/<universe>/`, and
@@ -95,7 +108,7 @@ the `GOLDMAN_ROOT` environment variable if needed.
 | `analysis/factor_construction.py` | Self-built SMB (lagged point-in-time size) and WML (12-1 momentum) long–short spreads | `factor_cumulative_<universe>.png` (US panel plots the downloaded Fama–French SMB/HML) |
 | `analysis/factor_models.py` | Multi-factor SCL regressions; alphas before/after factors on a common sample; joint GRS | `factors_<universe>_alphas.csv`, `..._summary.csv`, `factors_<universe>_<model>_scl.csv`, `factors_<universe>_alpha_comparison.png` |
 | `analysis/robustness.py` | No-short maximum Sharpe, shrinkage of covariance and means, half sample stability, out of sample Sharpe | `robustness_<universe>_diagnostics.csv`, `..._weights.csv`, `robustness_<universe>.png` |
-| `analysis/out_of_sample.py` | Expanding-window backtest of estimated variants, plus 1/N and the supplied index series; index timing remains a caveat | `out_of_sample_<universe>_growth.png`, `out_of_sample_<universe>_sharpe.png` |
+| `analysis/out_of_sample.py` | Expanding-window walk-forward backtest: re-estimate the index, 1/N and the tangency variants each month, trade the next month; out-of-sample growth and Sharpe | `out_of_sample_<universe>_growth.png`, `out_of_sample_<universe>_sharpe.png` |
 | `data/markets.py` | Market proxy `R_M - R_f`: cap-weighted composite or FF `Mkt-RF` | — |
 | `viz.py` | The report's look (seaborn with the QuantumBlack dark theme) and one figure per story beat: correlation, risk/return, weights, drift, robustness, alphas, SML, GRS, proxy comparison, factor growth, alpha comparison | `*.png` exhibits |
 
@@ -108,7 +121,11 @@ bottom.
 | File | What it is |
 |---|---|
 | `data/prices_us_monthly.csv` | 30 US names (21 mega-caps + 9 SPDR sector ETFs) |
-| `data/prices_sg_monthly.csv` | ~30 large SGX names (approximately the STI) |
+| `data/prices_sg_monthly.csv` | ~30 large SGX names (approximately the STI), SGD total-return index rebuilt by `goldman.data.cleaning` |
+| `data/corporate_actions_sg.csv` | Every SG correction (spin-offs, distributions in specie, share-count overrides) with its SGX source |
+| `data/cleaning_report_sg.txt` | What each SG correction changed, per ticker, versus Yahoo's adjusted close |
+| `data/raw/sg_daily/<ticker>.csv` | Daily Yahoo `close`, `adj_close`, `dividend`, `split` and SGX `sgx_close`, `currency` |
+| `data/raw/fx/usdsgd_monthly.csv` | Month-end USD/SGD (Yahoo `SGD=X`), for the three USD-quoted SG listings |
 | `data/ff3_monthly.csv` | Fama–French 3 factors + RF, decimals, monthly (US); the Stage-3 external benchmark |
 | `data/rf_sg_monthly.csv` | Monthly SG risk-free from the MAS compounded SORA Index (month-over-month change), decimal. Raw export and method in `data/raw/mas/` and `rf_sg_monthly.source.txt` |
 | `data/raw/<universe>/<ticker>.csv` | Raw per-ticker `close`, `adj_close`, `shares` cache |
@@ -117,22 +134,49 @@ bottom.
 | `data/sample_synthetic_prices.csv` | **Fake** data for smoke-testing; not for the report |
 | `data/coverage_report.txt` | What the downloader fetched |
 
-Cleaning decisions (sparse-ticker drops, fully-observed months) are made once,
-in `src/goldman/data/`.
+Cleaning decisions (sparse-ticker drops, fully-observed months, the Singapore
+rebuild) are made once, in `src/goldman/data/`.
 
 ### Honest caveats
 
-- Prices are Yahoo **adjusted closes** (splits + dividends) — a total-return
-  proxy. Say so in the report.
+- US prices are Yahoo **adjusted closes** (splits + dividends), a total-return
+  proxy. Rebuilt from Yahoo's raw closes plus dividends they agree within 0.11%
+  in every month, with no mis-adjusted ex-date.
+- **Singapore data cleaning.** Yahoo's adjusted close is wrong for several SGX
+  names, so `goldman.data.cleaning` rebuilds every SG series:
+  - ThaiBev (Y92): before 2024 Yahoo adjusts each dividend using the baht amount
+    as if it were SGD (about 26x too large); its adjusted price grows 287x over
+    the decade against a true total return of 0.67x.
+  - Jardine C&C (C07): since 2020-09 Yahoo adjusts with the US-dollar amount,
+    so each dividend counts about 78%.
+  - Distributions in specie (U96 2020-09, BS6 2022-04, BN4 2023-02, plus the
+    small C09 2022-05 and BN4 2023-10/2026-04 ones): Yahoo scales earlier
+    closes but not earlier dividends, inflating pre-event yields up to 2x. For
+    the three large spin-offs it also shows an ex-date jump of +13% to +22%
+    where holders gained +3% to +10%, so those ex-dates are rebuilt as
+    (SGX ex price + dividend + distributed shares at their SGX price) / SGX cum price.
+  - Market caps use SGX's unadjusted month-end price, since Yahoo's scaled
+    close halves Sembcorp's and Yangzijiang's pre-spin-off caps. Two share-count
+    glitches are overridden (UOB 2017-03; Jardine Matheson 2019-07..2022-05,
+    where Yahoo counts the Jardine Strategic cross-holding).
+  - DFI Retail, Hongkong Land and Jardine Matheson trade in USD on SGX. Their
+    returns and caps are converted to SGD at month-end USD/SGD.
+  - Every correction has its SGX corporate-action number in
+    `data/corporate_actions_sg.csv`. 9CI (listed 2021) is cleaned but still
+    dropped by the 90-month rule.
+  - SGX's historical-price service returns roughly the last ten years, and the
+    committed cache starts in 2016-09. A later `sg-daily --refresh` would lose
+    the first months of the panel, so keep the committed cache for this report.
+- One known US approximation: Yahoo records Merck's 2021 Organon spin-off as a
+  1.048 split, so MRK's market cap before June 2021 is about 5% too high in the
+  value weights. Its returns are unaffected.
 - The SG list is *approximately* the STI; verify current constituents before
   using value weights.
 - Both universes are **today's members backfilled ten years** — the
   survivorship bias the handout asks you to acknowledge and discuss.
-- Value weights use historical monthly `market cap(t) = split-unadjusted
-  close(t) x shares outstanding(t)`, with forward-filled reported shares and
-  the early-history approximations described below. Current index returns use
-  these month-end weights on same-month returns; lagged weights are needed
-  before interpreting the series as an implementable benchmark. The weight CSV is long
+- Value weights are **point-in-time**: `market cap(t) = split-unadjusted
+  close(t) x shares outstanding(t)`, with shares forward-filled from their
+  report dates, so no month uses a future share count. The weight CSV is long
   format (`asset, date, market_cap, weight`); the chart uses the sample-average
   vector and the full monthly panel is written to `outputs/value_weights.csv`.
 - **Risk-free rates differ by market.** US uses the Fama–French `RF` column;
@@ -160,45 +204,3 @@ when run top to bottom, and doubles as the report. Generated exhibits go to
 `outputs/` (git-ignored; US and SG portfolio exhibits under `outputs/us/` and
 `outputs/sg/`, CAPM exhibits as `capm_<universe>_<proxy>_*`). Package versions
 are pinned in `pyproject.toml` / `uv.lock`.
-
-## Robust inference and sensitivity
-
-Section 6 and Appendix A of `notebooks/report.ipynb` apply the `robust_inference` and
-`sensitivity` modules to the existing US and Singapore Stage-2/3 models.
-They compare ordinary inference with Newey–West at 0, 3 and 6 monthly lags,
-and summarise the US stock-only subset with factors and dates held fixed.
-The notebook asserts agreement with the original OLS estimates and calendars.
-
-See [ROBUSTNESS_RESULTS.md](ROBUSTNESS_RESULTS.md) for the current interpretation
-and limitations. Re-running the notebook writes tables, sample dates and input
-fingerprints under `outputs/inference_robustness/`. These are individual-alpha
-checks; the existing GRS tests remain classical and are not validated by HAC.
-
-## Submission requirements (default Track A)
-
-The notebook is the executable evidence source. Its HTML preview is not the
-required submission format. The handout requires a PDF report of at most
-12 pages **including exhibits**, with a one-page executive summary and a
-Stage-4 memo of at most two pages. Appendices may be any length. Detailed
-inference, stocks-only checks and the expanding-window comparison now sit in
-appendices to keep the required four-stage argument prominent.
-
-- Stage 1: compare tangency weights with **value weights on the same universe**.
-- Stage 2: choose and justify a riskless proxy and a market proxy. No named
-  commercial index is mandatory.
-- Stage 3: include at least two factors beyond the market and explain them.
-- Stage 4: recommend an allocation, repeat Stage 2 with a different market
-  proxy, and explain the least-trusted result. Outperforming a benchmark is
-  not a requirement. An out-of-sample horse race is optional under Track A.
-- Robustness is rewarded when it changes a conclusion or demonstrates stability;
-  Section 6 retains that conclusion and sends implementation detail to Appendix A.
-
-Before submission: verify PDF page counts and legibility; add the half-page
-contribution statement signed by every member; complete data/paper references
-and confirm the AI acknowledgment covers the group's actual use; and rerun
-from the cached inputs. The current review does not certify PDF pagination.
-
-The same-month index weights must be lagged and the comparison rerun before
-claiming implementable benchmark performance. The two market proxies should
-also be compared on identical dates to isolate their effect. Current text
-explicitly qualifies both issues; the robustness work does not repair them.
