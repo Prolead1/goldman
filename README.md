@@ -35,6 +35,7 @@ swapping the market proxy is a single argument.
 │   │   ├── capm.py             # SCL regressions, empirical SML, GRS test
 │   │   ├── factor_construction.py  # self-built size (SMB) and momentum (WML)
 │   │   ├── custom_factors.py   # 52-week high + vol-managed momentum, scorecard
+│   │   ├── industry_momentum.py  # momentum on 10 Ken French industries, 1964-2026
 │   │   ├── factor_models.py    # multi-factor regressions, alpha comparison
 │   │   ├── robustness.py       # no-short and shrinkage variants
 │   │   └── out_of_sample.py    # expanding-window walk-forward validation
@@ -79,6 +80,7 @@ uv run python -m goldman.data.fetch prices       # prices + FF3 factors
 uv run python -m goldman.data.fetch caps         # fetch + build value weights
 uv run python -m goldman.data.fetch sg-daily     # SG daily cache (Yahoo + SGX) + USD/SGD
 uv run python -m goldman.data.fetch sg-build     # offline: clean SG prices + weights
+uv run python -m goldman.data.fetch long-history # Ken French 10 industries + factors since 1926
 uv run python -m goldman.data.fetch all          # everything
 ```
 
@@ -108,6 +110,7 @@ the `GOLDMAN_ROOT` environment variable if needed.
 | `analysis/capm.py` | Per-asset `α̂, β̂, t(α̂), R²`; the empirical vs theoretical SML; the GRS joint alpha test | `capm_<universe>_<proxy>_scl.csv`, `..._sml.png`, `..._summary.txt` |
 | `analysis/factor_construction.py` | Self-built SMB (lagged point-in-time size) and WML (12-1 momentum) long–short spreads | `factor_cumulative_<universe>.png` (US panel plots the downloaded Fama–French SMB/HML) |
 | `analysis/custom_factors.py` | Two custom factors run on both markets: 52-week high (NEAR52, George and Hwang 2004) and volatility-managed momentum (VWML, Barroso and Santa-Clara 2015); scorecard (Sharpe, CAPM alpha, drawdown, turnover, break-even cost) and spanning regressions | `custom_factor_growth_paired.png`, `custom_factor_scorecard.png` |
+| `analysis/industry_momentum.py` | Industry momentum (Moskowitz and Grinblatt 1999) on the 10 Ken French industries, 1964-07 to 2026-08: premium, CAPM and FF3 alphas, correlation with Ken French `Mom`, turnover and break-even cost, by sub-period | `industry_momentum.png` |
 | `analysis/factor_models.py` | Multi-factor SCL regressions; alphas before/after factors on a common sample; joint GRS | `factors_<universe>_alphas.csv`, `..._summary.csv`, `factors_<universe>_<model>_scl.csv`, `factors_<universe>_alpha_comparison.png` |
 | `analysis/robustness.py` | No-short maximum Sharpe, shrinkage of covariance and means, half sample stability, out of sample Sharpe | `robustness_<universe>_diagnostics.csv`, `..._weights.csv`, `robustness_<universe>.png` |
 | `analysis/out_of_sample.py` | Expanding-window walk-forward backtest: re-estimate the index, 1/N and the tangency variants each month, trade the next month; out-of-sample growth and Sharpe | `out_of_sample_<universe>_growth.png`, `out_of_sample_<universe>_sharpe.png` |
@@ -129,6 +132,8 @@ bottom.
 | `data/raw/sg_daily/<ticker>.csv` | Daily Yahoo `close`, `adj_close`, `dividend`, `split` and SGX `sgx_close`, `currency` |
 | `data/raw/fx/usdsgd_monthly.csv` | Month-end USD/SGD (Yahoo `SGD=X`), for the three USD-quoted SG listings |
 | `data/ff3_monthly.csv` | Fama–French 3 factors + RF, decimals, monthly (US); the Stage-3 external benchmark |
+| `data/long_ind10_vw_monthly.csv` | Ken French 10 value-weighted US industry portfolios, 1963-07 onward, decimals (every CRSP stock, no survivorship) |
+| `data/long_ff3_monthly.csv`, `data/long_momentum_monthly.csv` | Ken French FF3 + RF (1926-07 onward) and `Mom` (1927-01 onward), decimals; the benchmarks for industry momentum |
 | `data/rf_sg_monthly.csv` | Monthly SG risk-free from the MAS compounded SORA Index (month-over-month change), decimal. Raw export and method in `data/raw/mas/` and `rf_sg_monthly.source.txt` |
 | `data/raw/<universe>/<ticker>.csv` | Raw per-ticker `close`, `adj_close`, `shares` cache |
 | `data/value_weights_us.csv` | US point-in-time market cap -> monthly value weights |

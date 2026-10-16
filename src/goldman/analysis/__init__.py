@@ -11,6 +11,7 @@ from . import (
     custom_factors,
     factor_construction,
     factor_models,
+    industry_momentum,
     out_of_sample,
     portfolio,
     portfolio_choice,
@@ -48,6 +49,7 @@ from .factor_models import (
     model_summary,
     run_factor_analysis,
 )
+from .industry_momentum import build_industry_momentum, industry_momentum_report
 from .out_of_sample import (
     OOS_BENCHMARKS,
     OutOfSampleResult,
@@ -93,6 +95,9 @@ __all__ = [
     "near_high_signal",
     "spanning_regression",
     "volatility_scale",
+    "industry_momentum",
+    "build_industry_momentum",
+    "industry_momentum_report",
     "long_short_weights",
     "factor_construction",
     "factor_models",
