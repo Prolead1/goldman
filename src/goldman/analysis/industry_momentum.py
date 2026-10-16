@@ -23,12 +23,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+import numpy as np
 import pandas as pd
 
-from .custom_factors import factor_scorecard, spanning_regression, turnover
 from .factor_construction import long_short_weights, momentum_signal
+from .factor_models import factor_regression
 
-__all__ = ["build_industry_momentum", "industry_momentum_report"]
+__all__ = ["build_industry_momentum", "industry_momentum_report", "turnover"]
 
 
 def _timestamps(frame):
@@ -37,6 +38,21 @@ def _timestamps(frame):
         frame = frame.copy()
         frame.index = frame.index.to_timestamp()
     return frame
+
+
+def turnover(weights: pd.DataFrame) -> pd.Series:
+    """Monthly turnover: the sum of absolute weight changes across assets.
+
+    The first month a portfolio is formed counts its full gross position.
+    Drift between rebalances is ignored, which slightly understates the trades.
+    """
+    held = weights.fillna(0.0)
+    active = held.abs().sum(axis=1) > 0
+    change = held.diff().abs().sum(axis=1)
+    first = active.idxmax() if active.any() else None
+    if first is not None:
+        change.loc[first] = held.loc[first].abs().sum()
+    return change.where(active | active.shift(1, fill_value=False)).rename("turnover")
 
 
 def build_industry_momentum(
@@ -50,7 +66,7 @@ def build_industry_momentum(
 
     Returns ``(factor, traded)`` on a month-start ``DatetimeIndex``.  Turnover is
     the sum of absolute weight changes; the first month counts the full gross
-    position of 2 (as :func:`goldman.analysis.custom_factors.turnover` does).
+    position of 2 (see :func:`turnover`).
     """
     industries = _timestamps(industries)
     signal = momentum_signal(industries, lookback=lookback, skip=skip)
@@ -67,6 +83,7 @@ def industry_momentum_report(
     *,
     periods: Mapping[str, tuple[str, str]],
     cost_bps: float = 50.0,
+    periods_per_year: int = 12,
 ) -> pd.DataFrame:
     """One row per period: premium, CAPM and FF3 alphas, link to ``Mom``, costs.
 
@@ -75,27 +92,28 @@ def industry_momentum_report(
     ``periods`` maps a label to an inclusive ``(start, end)`` pair of months.
     """
     factors = _timestamps(factors)
+    ann = periods_per_year
     rows = {}
     for label, (start, end) in periods.items():
-        f = factor.loc[start:end]
-        cost = traded.loc[start:end]
-        card = factor_scorecard(
-            f.to_frame(), factors["Mkt-RF"], turnovers=cost.to_frame(), cost_bps=cost_bps
-        ).loc["IndMom"]
-        ff3 = spanning_regression({"FF3": (f, factors[["Mkt-RF", "SMB", "HML"]])}).loc["FF3"]
+        f = factor.loc[start:end].dropna()
+        cost = traded.reindex(f.index)
+        frame = f.to_frame("f")
+        capm = factor_regression(frame, factors[["Mkt-RF"]], rf=0.0).loc["f"]
+        ff3 = factor_regression(frame, factors[["Mkt-RF", "SMB", "HML"]], rf=0.0).loc["f"]
+        n, mean, std = len(f), f.mean(), f.std()
         rows[label] = {
-            "months": int(card["months"]),
-            "ann. mean": card["ann. mean"],
-            "t(mean)": card["t(mean)"],
-            "Sharpe": card["Sharpe"],
-            "CAPM alpha (ann.)": card["CAPM alpha (ann.)"],
-            "t(CAPM alpha)": card["t(CAPM alpha)"],
-            "FF3 alpha (ann.)": ff3["alpha (ann.)"],
-            "t(FF3 alpha)": ff3["t(alpha)"],
+            "months": n,
+            "ann. mean": mean * ann,
+            "t(mean)": mean / (std / np.sqrt(n)),
+            "Sharpe": mean / std * np.sqrt(ann),
+            "CAPM alpha (ann.)": capm["alpha"] * ann,
+            "t(CAPM alpha)": capm["t_alpha"],
+            "FF3 alpha (ann.)": ff3["alpha"] * ann,
+            "t(FF3 alpha)": ff3["t_alpha"],
             "corr with Mom": float(f.corr(factors["Mom"].reindex(f.index))),
-            "turnover / month": card["turnover / month"],
-            f"net mean at {cost_bps:g}bp (ann.)": card[f"net mean at {cost_bps:g}bp (ann.)"],
-            "break-even cost (bp)": card["break-even cost (bp)"],
+            "turnover / month": cost.mean(),
+            f"net mean at {cost_bps:g}bp (ann.)": (f - cost * cost_bps / 1e4).mean() * ann,
+            "break-even cost (bp)": mean / cost.mean() * 1e4,
         }
     table = pd.DataFrame(rows).T
     table.index.name = "period"

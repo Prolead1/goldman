@@ -53,8 +53,6 @@ __all__ = [
     "plot_oos_growth_paired",
     "plot_oos_sharpe_paired",
     "plot_index_concentration",
-    "plot_custom_factor_growth_paired",
-    "plot_custom_factor_scorecard",
     "plot_industry_momentum",
 ]
 
@@ -932,118 +930,6 @@ def plot_index_concentration(
     right.legend(loc="lower right", fontsize=8)
 
     fig.suptitle(title, fontweight="bold")
-    return _save(fig, output_path)
-
-
-# ------------------------------------------------------------ custom factors
-#: Momentum is the reference, the two refinements the challengers, the market
-#: the backdrop.
-CUSTOM_COLORS = {
-    "WML": COLORS["muted"],
-    "NEAR52": COLORS["accent"],
-    "VWML": COLORS["long"],
-    "Mkt-RF": COLORS["theory"],
-}
-CUSTOM_LABELS = {
-    "WML": "momentum (WML)",
-    "NEAR52": "52-week high (NEAR52)",
-    "VWML": "vol-managed momentum (VWML)",
-    "Mkt-RF": "market excess return",
-}
-
-
-def _plot_custom_growth(panel: pd.DataFrame, axis: plt.Axes) -> plt.Axes:
-    """Growth of 1 unit in each column of ``panel`` on its common sample."""
-    growth = (1.0 + panel.dropna()).cumprod()
-    for name in growth.columns:
-        is_market = name == "Mkt-RF"
-        axis.plot(
-            growth.index,
-            growth[name].to_numpy(),
-            lw=1.4 if is_market else (2.6 if name != "WML" else 1.8),
-            ls="--" if is_market else "-",
-            color=CUSTOM_COLORS.get(name, COLORS["muted"]),
-            label=CUSTOM_LABELS.get(name, name),
-            zorder=2 if is_market or name == "WML" else 3,
-        )
-        final = float(growth[name].iloc[-1])
-        axis.annotate(
-            f"{final:.2f}x",
-            (growth.index[-1], final),
-            fontsize=8,
-            xytext=(5, 0),
-            textcoords="offset points",
-            va="center",
-            color=CUSTOM_COLORS.get(name, COLORS["muted"]),
-        )
-    axis.axhline(1.0, lw=0.8, color=COLORS["muted"], ls=":")
-    axis.set_ylabel("growth of 1 unit")
-    axis.legend(loc="upper left", fontsize=8)
-    return axis
-
-
-def plot_custom_factor_growth_paired(panels, output_path: str | Path) -> Path:
-    """Cumulative growth of the custom factors against momentum and the market.
-
-    ``panels`` maps a universe to a frame with columns such as ``WML``,
-    ``NEAR52``, ``VWML`` and ``Mkt-RF``; each panel uses the months where all of
-    them exist, so the lines start together.
-    """
-    return _paired_panels(
-        panels,
-        _plot_custom_growth,
-        output_path,
-        "Two refinements of momentum, the same rules in both markets",
-        (14.5, 5.2),
-    )
-
-
-def plot_custom_factor_scorecard(
-    scorecards,
-    output_path: str | Path,
-    factors=("WML", "NEAR52", "VWML"),
-) -> Path:
-    """Sharpe ratio and CAPM alpha with 95% intervals, both markets on one axis.
-
-    ``scorecards`` maps a universe to the table from
-    :func:`goldman.analysis.custom_factors.factor_scorecard`.  Each factor gets
-    one row per market, so a reader can see in one glance which factor works
-    where and whether its interval clears zero.
-    """
-    apply_theme()
-    fig, axes = plt.subplots(1, 2, figsize=(13.5, 4.6), layout="constrained")
-    panels = [
-        ("Sharpe", "Sharpe se", "annualised Sharpe ratio", "Sharpe ratio"),
-        ("CAPM alpha (ann.)", None, "annualised CAPM alpha", "CAPM alpha"),
-    ]
-    rows = np.arange(len(factors))[::-1]
-    offsets = np.linspace(0.15, -0.15, len(scorecards)) if len(scorecards) > 1 else [0.0]
-    for axis, (column, se_column, xlabel, title) in zip(axes, panels, strict=True):
-        for offset, (name, table) in zip(offsets, scorecards.items(), strict=True):
-            values = table.loc[list(factors), column].astype(float).to_numpy()
-            if se_column is None:
-                se = np.abs(values / table.loc[list(factors), "t(CAPM alpha)"].astype(float))
-            else:
-                se = table.loc[list(factors), se_column].astype(float).to_numpy()
-            axis.errorbar(
-                values,
-                rows + offset,
-                xerr=1.96 * np.asarray(se),
-                fmt="o",
-                ms=7,
-                capsize=3,
-                lw=1.6,
-                color=_color(name, 0),
-                label=_market_label(name),
-            )
-        axis.axvline(0.0, color="white", lw=1.0)
-        axis.set_yticks(rows)
-        axis.set_yticklabels([CUSTOM_LABELS.get(f, f) for f in factors], fontsize=9)
-        axis.set_xlabel(xlabel)
-        axis.set_title(title)
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside lower center", ncol=len(labels), fontsize=9)
-    fig.suptitle("Which factor works where (bars are 95% intervals)", fontweight="bold")
     return _save(fig, output_path)
 
 

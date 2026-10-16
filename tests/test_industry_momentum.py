@@ -7,7 +7,11 @@ import pandas as pd
 
 from goldman import viz
 from goldman.analysis.factor_construction import momentum_factor
-from goldman.analysis.industry_momentum import build_industry_momentum, industry_momentum_report
+from goldman.analysis.industry_momentum import (
+    build_industry_momentum,
+    industry_momentum_report,
+    turnover,
+)
 from goldman.data import load_long_history
 
 
@@ -77,3 +81,13 @@ def test_plot_industry_momentum(tmp_path):
         panel, tmp_path / "ind.png", window=60, highlight=("2000-01", "2005-12")
     )
     assert path.exists() and path.stat().st_size > 0
+
+
+def test_turnover_counts_formation_and_flips():
+    index = pd.date_range("2020-01-01", periods=4, freq="MS")
+    weights = pd.DataFrame(
+        {"a": [0.0, 1.0, -1.0, -1.0], "b": [0.0, -1.0, 1.0, 1.0]}, index=index
+    )
+    traded = turnover(weights)
+    assert np.isnan(traded.iloc[0])
+    assert traded.tolist()[1:] == [2.0, 4.0, 0.0]
