@@ -1019,15 +1019,25 @@ def plot_industry_momentum(
 
 
 #: One colour per self-built factor in the tradability exhibit.
-FACTOR_COLORS = {"SMB": COLORS["accent"], "WML": COLORS["long"]}
-FACTOR_LABELS = {"SMB": "size (SMB)", "WML": "momentum (WML)"}
+FACTOR_COLORS = {
+    "SMB": COLORS["accent"],
+    "WML": COLORS["long"],
+    "LOWVOL": COLORS["positive"],
+    "REV": COLORS["short"],
+}
+FACTOR_LABELS = {
+    "SMB": "size (SMB)",
+    "WML": "momentum (WML)",
+    "LOWVOL": "low vol (LOWVOL)",
+    "REV": "reversal (REV)",
+}
 
 
 def plot_factor_tradability(
     tradability,
     output_path: str | Path,
     *,
-    factors=("SMB", "WML"),
+    factors=("SMB", "WML", "LOWVOL", "REV"),
     costs_bps=(0, 10, 25, 50, 100),
 ) -> Path:
     """What the self-built factors keep after costs, and how deep they draw down.
@@ -1082,7 +1092,5 @@ def plot_factor_tradability(
         drawdown_axis.axhline(0.0, color=COLORS["muted"], lw=0.9)
         drawdown_axis.set_ylabel("drawdown (%)")
         drawdown_axis.legend(loc="lower left", fontsize=8)
-    fig.suptitle(
-        "Tradability of the self-built size and momentum factors", fontweight="bold"
-    )
+    fig.suptitle("Tradability of the self-built factors", fontweight="bold")
     return _save(fig, output_path)

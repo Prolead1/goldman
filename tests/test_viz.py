@@ -273,9 +273,10 @@ def test_plot_factor_tradability(tmp_path):
             break_even_bps=30.0 * scale,
         )
 
+    scales = (("SMB", 1.0), ("WML", 2.0), ("LOWVOL", 1.5), ("REV", 0.8))
     panels = {
-        "us": {"SMB": result(1.0), "WML": result(2.0)},
-        "sg": {"SMB": result(0.5), "WML": result(1.5)},
+        "us": {name: result(scale) for name, scale in scales},
+        "sg": {name: result(scale * 0.5) for name, scale in scales},
     }
     _assert_png(viz.plot_factor_tradability(panels, tmp_path / "factor_tradability.png"))
 

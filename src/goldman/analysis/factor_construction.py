@@ -38,6 +38,10 @@ __all__ = [
     "size_weights",
     "momentum_signal",
     "momentum_factor",
+    "low_volatility_factor",
+    "low_volatility_weights",
+    "reversal_factor",
+    "reversal_weights",
     "Tradability",
     "factor_tradability",
     "momentum_tradability",
@@ -225,6 +229,55 @@ def momentum_factor(
     return spread.rename("WML")
 
 
+def low_volatility_factor(
+    returns: pd.DataFrame,
+    *,
+    window: int = 12,
+    n_quantiles: int = 3,
+) -> pd.Series:
+    """LOWVOL: long the calmest third, short the most volatile third.
+
+    The signal is each asset's standard deviation over months ``t-window`` to
+    ``t-1`` (the sort never sees the month it predicts); ``long_high=False``
+    puts the long leg on the lowest volatility.
+    """
+    signal = returns.shift(1).rolling(window, min_periods=window).std()
+    spread = long_short_spread(returns, signal, n_quantiles=n_quantiles, long_high=False)
+    return spread.rename("LOWVOL")
+
+
+def reversal_factor(
+    returns: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+) -> pd.Series:
+    """REV: long last month's losers, short last month's winners (1-month reversal)."""
+    spread = long_short_spread(returns, returns.shift(1), n_quantiles=n_quantiles, long_high=False)
+    return spread.rename("REV")
+
+
+def low_volatility_weights(
+    returns: pd.DataFrame,
+    *,
+    window: int = 12,
+    n_quantiles: int = 3,
+) -> pd.DataFrame:
+    """The holdings behind :func:`low_volatility_factor`, one row per month."""
+    signal = returns.shift(1).rolling(window, min_periods=window).std()
+    return long_short_weights(returns, signal, n_quantiles=n_quantiles, long_high=False)
+
+
+def reversal_weights(
+    returns: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+) -> pd.DataFrame:
+    """The holdings behind :func:`reversal_factor`, one row per month."""
+    return long_short_weights(
+        returns, returns.shift(1), n_quantiles=n_quantiles, long_high=False
+    )
+
+
 def build_self_factors(
     returns: pd.DataFrame,
     *,
@@ -255,6 +308,8 @@ def build_self_factors(
             "WML": momentum_factor(
                 returns, lookback=lookback, skip=skip, n_quantiles=n_quantiles
             ),
+            "LOWVOL": low_volatility_factor(returns, n_quantiles=n_quantiles),
+            "REV": reversal_factor(returns, n_quantiles=n_quantiles),
         }
     )
     factors.index.name = returns.index.name
@@ -354,5 +409,13 @@ def self_factor_tradability(
         "SMB": size_tradability(returns, value_weights, n_quantiles=n_quantiles),
         "WML": momentum_tradability(
             returns, n_quantiles=n_quantiles, lookback=lookback, skip=skip
+        ),
+        "LOWVOL": factor_tradability(
+            returns,
+            low_volatility_weights(returns, n_quantiles=n_quantiles),
+            name="LOWVOL",
+        ),
+        "REV": factor_tradability(
+            returns, reversal_weights(returns, n_quantiles=n_quantiles), name="REV"
         ),
     }

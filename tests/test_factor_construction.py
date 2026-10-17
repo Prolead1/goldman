@@ -10,9 +10,11 @@ from goldman.analysis.factor_construction import (
     build_self_factors,
     long_short_spread,
     long_short_weights,
+    low_volatility_factor,
     momentum_factor,
     momentum_signal,
     momentum_tradability,
+    reversal_factor,
     self_factor_tradability,
     size_factor,
     turnover,
@@ -70,6 +72,30 @@ def test_size_factor_rewards_small_caps_and_lags_the_weights():
     assert (factor.iloc[1:] > 0).all()
 
 
+def test_reversal_factor_is_contrarian():
+    dates = _dates(2)
+    previous = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06]
+    current = list(reversed(previous))
+    returns = pd.DataFrame([previous, current], index=dates, columns=list("abcdef"))
+    factor = reversal_factor(returns)
+    # Long the past losers (a, b), short the past winners (e, f).
+    assert factor.iloc[1] == pytest.approx((0.06 + 0.05) / 2 - (0.02 + 0.01) / 2)
+    assert np.isnan(factor.iloc[0])  # no lagged signal in the first month
+
+
+def test_low_volatility_factor_has_no_look_ahead():
+    rng = np.random.default_rng(3)
+    returns = pd.DataFrame(
+        rng.normal(0.008, 0.06, (40, 9)), index=_dates(40), columns=[f"a{i}" for i in range(9)]
+    )
+    base = low_volatility_factor(returns, window=12)
+    changed = returns.copy()
+    changed.iloc[-1] = 0.9
+    altered = low_volatility_factor(changed, window=12)
+    pd.testing.assert_series_equal(base.iloc[:-1], altered.iloc[:-1])
+    assert base.iloc[:12].isna().all()
+
+
 def test_momentum_signal_is_lagged_formation_return():
     dates = _dates(20)
     rate = 0.02
@@ -105,7 +131,7 @@ def test_build_self_factors_columns_and_requires_source():
         np.tile(np.linspace(0.1, 0.3, 5), (len(dates), 1)), index=dates, columns=list("abcde")
     )
     factors = build_self_factors(returns, value_weights=weights)
-    assert list(factors.columns) == ["SMB", "WML"]
+    assert list(factors.columns) == ["SMB", "WML", "LOWVOL", "REV"]
     assert factors.index.equals(returns.index)
     with pytest.raises(ValueError, match="value_weights"):
         build_self_factors(returns)
@@ -168,8 +194,8 @@ def test_self_factor_tradability_matches_smb_and_wml():
     )
     built = build_self_factors(returns, value_weights=value_weights)
     results = self_factor_tradability(returns, value_weights)
-    assert set(results) == {"SMB", "WML"}
-    for factor in ("SMB", "WML"):
+    assert set(results) == {"SMB", "WML", "LOWVOL", "REV"}
+    for factor in ("SMB", "WML", "LOWVOL", "REV"):
         pd.testing.assert_series_equal(
             results[factor].factor,
             built[factor].dropna(),
