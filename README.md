@@ -217,8 +217,8 @@ are pinned in `pyproject.toml` / `uv.lock`.
 
 Section 7 also runs `analysis/robust_inference.py` and `analysis/sensitivity.py`
 against the existing Stage-2/3 model inputs. Exhibit 5 compares ordinary and
-Newey-West standard errors at 0, 3 and 6 monthly lags; the numerical takeaway
-is generated from the same results. Per-asset p-values, summary counts, exact
+Newey-West standard errors at 0, 3 and 6 monthly lags; the takeaway reports
+those counts. Per-asset p-values, summary counts, exact
 sample dates, data hashes and package versions are saved under
 `outputs/inference_robustness/`. To verify a summary count, count the per-asset
 p-values below 0.05 in `inference_flags.csv` for the corresponding model and
