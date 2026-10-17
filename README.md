@@ -63,10 +63,10 @@ uv run ruff check .
 
 `notebooks/report.ipynb` is **both the written report and the reproducible entry
 point**: it is organised as a report (executive summary, methodology, Stage 1,
-Stage 2, Stage 3, Roll robustness, and the Stage-4 memo, which carries the
-out-of-sample validation and the Roll exhibit), closing with an appendix for the
-contribution statement, AI-tool acknowledgement, data sources, references and
-reproducibility. Every table and figure in it
+Stage 2, Stage 3, and the Stage-4 memo, which carries the out-of-sample
+validation, the inference checks and the Roll's-critique exhibit), closing with an
+appendix for the contribution statement, AI-tool acknowledgement, data sources,
+references and reproducibility. Every table and figure in it
 is generated from the committed data when the notebook is run top to bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
 throughout as a cross-market check. Code cells are tagged `hide_input`, so a
 report export can hide them, e.g.
@@ -179,8 +179,10 @@ rebuild) are made once, in `src/goldman/data/`.
   value weights. Its returns are unaffected.
 - The SG list is *approximately* the STI; verify current constituents before
   using value weights.
-- Both universes are **today's members backfilled ten years** — the
-  survivorship bias the handout asks you to acknowledge and discuss.
+- Both universes are **today's members backfilled ten years**. The report treats
+  this survivorship as its main finding rather than a caveat: the value-weighted
+  index is the survivors' own portfolio, so beating it on this universe is
+  unreasonable by construction, and the factor tests have no loser leg to sort.
 - Value weights are **point-in-time**: `market cap(t) = split-unadjusted
   close(t) x shares outstanding(t)`, with shares forward-filled from their
   report dates, so no month uses a future share count. The weight CSV is long
