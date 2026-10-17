@@ -26,7 +26,7 @@ from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 
-from .factor_construction import long_short_weights, momentum_signal
+from .factor_construction import long_short_weights, momentum_signal, turnover
 from .factor_models import factor_regression
 
 __all__ = ["build_industry_momentum", "industry_momentum_report", "turnover"]
@@ -38,21 +38,6 @@ def _timestamps(frame):
         frame = frame.copy()
         frame.index = frame.index.to_timestamp()
     return frame
-
-
-def turnover(weights: pd.DataFrame) -> pd.Series:
-    """Monthly turnover: the sum of absolute weight changes across assets.
-
-    The first month a portfolio is formed counts its full gross position.
-    Drift between rebalances is ignored, which slightly understates the trades.
-    """
-    held = weights.fillna(0.0)
-    active = held.abs().sum(axis=1) > 0
-    change = held.diff().abs().sum(axis=1)
-    first = active.idxmax() if active.any() else None
-    if first is not None:
-        change.loc[first] = held.loc[first].abs().sum()
-    return change.where(active | active.shift(1, fill_value=False)).rename("turnover")
 
 
 def build_industry_momentum(

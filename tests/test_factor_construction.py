@@ -10,9 +10,14 @@ from goldman.analysis.factor_construction import (
     build_self_factors,
     long_short_spread,
     long_short_weights,
+    low_volatility_factor,
     momentum_factor,
     momentum_signal,
+    momentum_tradability,
+    reversal_factor,
+    self_factor_tradability,
     size_factor,
+    turnover,
 )
 
 
@@ -67,6 +72,30 @@ def test_size_factor_rewards_small_caps_and_lags_the_weights():
     assert (factor.iloc[1:] > 0).all()
 
 
+def test_reversal_factor_is_contrarian():
+    dates = _dates(2)
+    previous = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06]
+    current = list(reversed(previous))
+    returns = pd.DataFrame([previous, current], index=dates, columns=list("abcdef"))
+    factor = reversal_factor(returns)
+    # Long the past losers (a, b), short the past winners (e, f).
+    assert factor.iloc[1] == pytest.approx((0.06 + 0.05) / 2 - (0.02 + 0.01) / 2)
+    assert np.isnan(factor.iloc[0])  # no lagged signal in the first month
+
+
+def test_low_volatility_factor_has_no_look_ahead():
+    rng = np.random.default_rng(3)
+    returns = pd.DataFrame(
+        rng.normal(0.008, 0.06, (40, 9)), index=_dates(40), columns=[f"a{i}" for i in range(9)]
+    )
+    base = low_volatility_factor(returns, window=12)
+    changed = returns.copy()
+    changed.iloc[-1] = 0.9
+    altered = low_volatility_factor(changed, window=12)
+    pd.testing.assert_series_equal(base.iloc[:-1], altered.iloc[:-1])
+    assert base.iloc[:12].isna().all()
+
+
 def test_momentum_signal_is_lagged_formation_return():
     dates = _dates(20)
     rate = 0.02
@@ -102,7 +131,7 @@ def test_build_self_factors_columns_and_requires_source():
         np.tile(np.linspace(0.1, 0.3, 5), (len(dates), 1)), index=dates, columns=list("abcde")
     )
     factors = build_self_factors(returns, value_weights=weights)
-    assert list(factors.columns) == ["SMB", "WML"]
+    assert list(factors.columns) == ["SMB", "WML", "LOWVOL", "REV"]
     assert factors.index.equals(returns.index)
     with pytest.raises(ValueError, match="value_weights"):
         build_self_factors(returns)
@@ -121,3 +150,58 @@ def test_long_short_weights_reproduce_the_spread():
     np.testing.assert_allclose(weights[active].sum(axis=1), 0.0, atol=1e-12)  # dollar neutral
     with pytest.raises(ValueError):
         long_short_weights(returns, signal, n_quantiles=1)
+
+
+def test_turnover_counts_formation_and_flips():
+    weights = pd.DataFrame(
+        [[0.5, -0.5], [-0.5, 0.5]], index=_dates(2), columns=["a", "b"]
+    )
+    traded = turnover(weights)
+    # Month one opens 1.0 gross; month two flips both half positions, so 2.0.
+    assert traded.iloc[0] == pytest.approx(1.0)
+    assert traded.iloc[1] == pytest.approx(2.0)
+
+
+def test_momentum_tradability_matches_the_reported_factor():
+    rng = np.random.default_rng(1)
+    returns = pd.DataFrame(
+        rng.normal(0.008, 0.06, (80, 9)), index=_dates(80), columns=[f"a{i}" for i in range(9)]
+    )
+    result = momentum_tradability(returns)
+    expected = momentum_factor(returns).dropna()
+    # The tradability factor is exactly the WML Stage 3 reports.
+    pd.testing.assert_series_equal(
+        result.factor, expected, check_names=False, check_freq=False
+    )
+    assert (result.turnover >= 0).all()
+    assert (result.drawdown <= 1e-12).all()
+    # At zero cost the curve is the gross annualised mean; at break-even it is zero.
+    assert result.cost_curve([0]).loc[0] == pytest.approx(result.factor.mean() * 12)
+    break_even = result.cost_curve([result.break_even_bps]).loc[result.break_even_bps]
+    assert break_even == pytest.approx(0.0, abs=1e-12)
+    assert result.break_even_bps == pytest.approx(
+        result.factor.mean() / result.turnover.mean() * 1e4
+    )
+
+
+def test_self_factor_tradability_matches_smb_and_wml():
+    rng = np.random.default_rng(2)
+    returns = pd.DataFrame(
+        rng.normal(0.008, 0.06, (80, 9)), index=_dates(80), columns=[f"a{i}" for i in range(9)]
+    )
+    value_weights = pd.DataFrame(
+        rng.uniform(0.05, 0.3, (80, 9)), index=_dates(80), columns=[f"a{i}" for i in range(9)]
+    )
+    built = build_self_factors(returns, value_weights=value_weights)
+    results = self_factor_tradability(returns, value_weights)
+    assert set(results) == {"SMB", "WML", "LOWVOL", "REV"}
+    for factor in ("SMB", "WML", "LOWVOL", "REV"):
+        pd.testing.assert_series_equal(
+            results[factor].factor,
+            built[factor].dropna(),
+            check_names=False,
+            check_freq=False,
+        )
+        assert results[factor].break_even_bps == pytest.approx(
+            results[factor].factor.mean() / results[factor].turnover.mean() * 1e4
+        )
