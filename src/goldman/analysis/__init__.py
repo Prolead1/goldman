@@ -27,12 +27,15 @@ from .capm import (
     security_characteristic_line,
 )
 from .factor_construction import (
+    Tradability,
     build_self_factors,
     long_short_spread,
     long_short_weights,
     momentum_factor,
     momentum_signal,
+    momentum_tradability,
     size_factor,
+    turnover,
 )
 from .factor_models import (
     FactorModelResult,
@@ -104,6 +107,9 @@ __all__ = [
     "model_summary",
     "momentum_factor",
     "momentum_signal",
+    "momentum_tradability",
+    "Tradability",
+    "turnover",
     "run_factor_analysis",
     "size_factor",
     "plot_sml",

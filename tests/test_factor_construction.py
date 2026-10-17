@@ -12,7 +12,9 @@ from goldman.analysis.factor_construction import (
     long_short_weights,
     momentum_factor,
     momentum_signal,
+    momentum_tradability,
     size_factor,
+    turnover,
 )
 
 
@@ -121,3 +123,35 @@ def test_long_short_weights_reproduce_the_spread():
     np.testing.assert_allclose(weights[active].sum(axis=1), 0.0, atol=1e-12)  # dollar neutral
     with pytest.raises(ValueError):
         long_short_weights(returns, signal, n_quantiles=1)
+
+
+def test_turnover_counts_formation_and_flips():
+    weights = pd.DataFrame(
+        [[0.5, -0.5], [-0.5, 0.5]], index=_dates(2), columns=["a", "b"]
+    )
+    traded = turnover(weights)
+    # Month one opens 1.0 gross; month two flips both half positions, so 2.0.
+    assert traded.iloc[0] == pytest.approx(1.0)
+    assert traded.iloc[1] == pytest.approx(2.0)
+
+
+def test_momentum_tradability_matches_the_reported_factor():
+    rng = np.random.default_rng(1)
+    returns = pd.DataFrame(
+        rng.normal(0.008, 0.06, (80, 9)), index=_dates(80), columns=[f"a{i}" for i in range(9)]
+    )
+    result = momentum_tradability(returns)
+    expected = momentum_factor(returns).dropna()
+    # The tradability factor is exactly the WML Stage 3 reports.
+    pd.testing.assert_series_equal(
+        result.factor, expected, check_names=False, check_freq=False
+    )
+    assert (result.turnover >= 0).all()
+    assert (result.drawdown <= 1e-12).all()
+    # At zero cost the curve is the gross annualised mean; at break-even it is zero.
+    assert result.cost_curve([0]).loc[0] == pytest.approx(result.factor.mean() * 12)
+    break_even = result.cost_curve([result.break_even_bps]).loc[result.break_even_bps]
+    assert break_even == pytest.approx(0.0, abs=1e-12)
+    assert result.break_even_bps == pytest.approx(
+        result.factor.mean() / result.turnover.mean() * 1e4
+    )

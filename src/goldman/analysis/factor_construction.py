@@ -25,15 +25,20 @@ exercise and is stated in the report.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 
 __all__ = [
     "long_short_spread",
     "long_short_weights",
+    "turnover",
     "size_factor",
     "momentum_signal",
     "momentum_factor",
+    "Tradability",
+    "momentum_tradability",
     "build_self_factors",
 ]
 
@@ -127,6 +132,21 @@ def long_short_weights(
     return weights
 
 
+def turnover(weights: pd.DataFrame) -> pd.Series:
+    """Monthly turnover: the sum of absolute weight changes across assets.
+
+    The first month a portfolio is formed counts its full gross position.
+    Drift between rebalances is ignored, which slightly understates the trades.
+    """
+    held = weights.fillna(0.0)
+    active = held.abs().sum(axis=1) > 0
+    change = held.diff().abs().sum(axis=1)
+    first = active.idxmax() if active.any() else None
+    if first is not None:
+        change.loc[first] = held.loc[first].abs().sum()
+    return change.where(active | active.shift(1, fill_value=False)).rename("turnover")
+
+
 def size_factor(
     returns: pd.DataFrame,
     value_weights: pd.DataFrame,
@@ -217,3 +237,53 @@ def build_self_factors(
     )
     factors.index.name = returns.index.name
     return factors
+
+
+@dataclass(frozen=True)
+class Tradability:
+    """Turnover, trading-cost sensitivity and drawdown of a momentum spread."""
+
+    factor: pd.Series
+    turnover: pd.Series
+    drawdown: pd.Series
+    break_even_bps: float
+
+    def cost_curve(self, costs_bps=(0, 10, 25, 50, 100)) -> pd.Series:
+        """Annualised mean return net of each per-unit-turnover cost.
+
+        A cost of ``c`` basis points is charged on turnover each month, so the
+        net mean is linear in ``c`` and reaches zero at :attr:`break_even_bps`.
+        """
+        costs = np.asarray(costs_bps, dtype=float)
+        annual = self.factor.mean() * 12 - self.turnover.mean() * costs / 1e4 * 12
+        return pd.Series(annual, index=costs, name="net_mean_annual")
+
+
+def momentum_tradability(
+    returns: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+    lookback: int = 12,
+    skip: int = 1,
+) -> Tradability:
+    """Turnover, cost sensitivity and drawdown for the self-built WML spread.
+
+    Uses :func:`momentum_signal` and :func:`long_short_weights` - the same code
+    path that builds ``WML`` in :func:`build_self_factors` - so the factor here
+    is exactly the reported one and the extra output is only what it costs to
+    trade it.
+    """
+    signal = momentum_signal(returns, lookback=lookback, skip=skip)
+    weights = long_short_weights(returns, signal, n_quantiles=n_quantiles, long_high=True)
+    active = weights.abs().sum(axis=1) > 0
+    factor = (weights * returns).sum(axis=1).where(active).dropna().rename("WML")
+    traded = turnover(weights).reindex(factor.index).rename("turnover")
+    wealth = (1.0 + factor).cumprod()
+    drawdown = (wealth / wealth.cummax() - 1.0).rename("drawdown")
+    break_even = float(factor.mean() / traded.mean() * 1e4)
+    return Tradability(
+        factor=factor,
+        turnover=traded,
+        drawdown=drawdown,
+        break_even_bps=break_even,
+    )

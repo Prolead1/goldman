@@ -54,6 +54,7 @@ __all__ = [
     "plot_oos_sharpe_paired",
     "plot_index_concentration",
     "plot_industry_momentum",
+    "plot_momentum_tradability",
 ]
 
 COLORS = {
@@ -1014,4 +1015,62 @@ def plot_industry_momentum(
             axis.axvspan(start, end, color=COLORS["muted"], alpha=0.18, lw=0)
         title += " (shaded: the decade our data cover)"
     fig.suptitle(title, fontweight="bold")
+    return _save(fig, output_path)
+
+
+def plot_momentum_tradability(
+    tradability,
+    output_path: str | Path,
+    *,
+    costs_bps=(0, 10, 25, 50, 100),
+) -> Path:
+    """What momentum keeps after costs, and how deep its drawdowns go.
+
+    ``tradability`` maps a universe name to a
+    :class:`goldman.analysis.factor_construction.Tradability`.  The left panel
+    traces the annualised mean of the spread net of a per-unit-turnover cost
+    and marks the break-even cost; the right panel shows the drawdown path.
+    """
+    apply_theme()
+    fig, axes = plt.subplots(1, 2, figsize=(14.5, 5.2), layout="constrained")
+    for index, (name, result) in enumerate(tradability.items()):
+        color = _color(name, index)
+        curve = result.cost_curve(costs_bps)
+        axes[0].plot(
+            curve.index,
+            curve.to_numpy() * 100,
+            marker="o",
+            lw=2.2,
+            color=color,
+            label=_market_label(name),
+        )
+        axes[0].scatter(
+            [result.break_even_bps], [0.0], color=color, edgecolor="white", zorder=5, s=55
+        )
+        axes[0].annotate(
+            f"break-even {result.break_even_bps:.0f} bp",
+            (result.break_even_bps, 0.0),
+            xytext=(6, 8),
+            textcoords="offset points",
+            fontsize=8,
+            color=color,
+        )
+        axes[1].plot(
+            result.drawdown.index,
+            result.drawdown.to_numpy() * 100,
+            lw=1.8,
+            color=color,
+            label=_market_label(name),
+        )
+    axes[0].axhline(0.0, color=COLORS["muted"], lw=0.9, ls="--")
+    axes[0].axvline(50.0, color=COLORS["accent"], lw=1.0, ls=":", label="50 bp")
+    axes[0].set_xlabel("cost per unit of turnover (bp)")
+    axes[0].set_ylabel("net annualised mean (%)")
+    axes[0].set_title("What the spread keeps after costs")
+    axes[0].legend(loc="best", fontsize=8)
+    axes[1].axhline(0.0, color=COLORS["muted"], lw=0.9)
+    axes[1].set_ylabel("drawdown (%)")
+    axes[1].set_title("Peak-to-trough drawdown")
+    axes[1].legend(loc="lower left", fontsize=8)
+    fig.suptitle("Tradability of the self-built momentum spread", fontweight="bold")
     return _save(fig, output_path)
