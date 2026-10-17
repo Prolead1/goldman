@@ -35,10 +35,12 @@ __all__ = [
     "plot_alpha_intervals",
     "plot_sml",
     "plot_grs",
+    "plot_capm_diagnostics",
     "plot_sml_fit",
     "plot_proxy_comparison",
     "plot_proxy_shift",
     "plot_alpha_comparison",
+    "plot_alpha_comparison_paired",
     "plot_factor_cumulative",
     "plot_oos_growth",
     "plot_oos_sharpe",
@@ -455,12 +457,9 @@ def plot_sml(
     return _finish(fig, output_path, axis)
 
 
-def plot_grs(results: dict, output_path: str | Path) -> Path:
-    """Step histogram of individual alpha t statistics, with the GRS verdict."""
-    apply_theme()
-    names = list(results)
-    fig, axis = plt.subplots(figsize=(8.5, 4.6))
-    for index, name in enumerate(names):
+def _draw_grs(results: dict, axis: plt.Axes) -> None:
+    """Draw the individual-alpha t histogram and GRS labels onto ``axis``."""
+    for index, name in enumerate(results):
         t_stats = results[name].table["t_alpha"].to_numpy()
         p_value = float(results[name].grs["p_value"])
         axis.hist(
@@ -479,15 +478,19 @@ def plot_grs(results: dict, output_path: str | Path) -> Path:
     axis.set_ylabel("number of assets")
     axis.set_title("Individual alpha t statistics")
     axis.legend(loc="upper right")
+
+
+def plot_grs(results: dict, output_path: str | Path) -> Path:
+    """Step histogram of individual alpha t statistics, with the GRS verdict."""
+    apply_theme()
+    fig, axis = plt.subplots(figsize=(8.5, 4.6))
+    _draw_grs(results, axis)
     return _save(fig, output_path)
 
 
-def plot_sml_fit(results: dict, output_path: str | Path) -> Path:
-    """Slope chart: how far each universe moves from theory to the fit."""
-    apply_theme()
-    names = list(results)
-    fig, (left, right) = plt.subplots(1, 2, figsize=(9.5, 4.2))
-    for index, name in enumerate(names):
+def _draw_sml_fit(results: dict, left: plt.Axes, right: plt.Axes) -> None:
+    """Draw the SML slope and intercept slope-charts onto ``left``/``right``."""
+    for index, name in enumerate(results):
         fit = results[name].fit
         color = _color(name, index)
         label = _label(name, MARKET_LABELS)
@@ -506,7 +509,24 @@ def plot_sml_fit(results: dict, output_path: str | Path) -> Path:
         axis.set_ylabel(ylabel)
         axis.set_title(heading)
     left.legend(loc="best")
+
+
+def plot_sml_fit(results: dict, output_path: str | Path) -> Path:
+    """Slope chart: how far each universe moves from theory to the fit."""
+    apply_theme()
+    fig, (left, right) = plt.subplots(1, 2, figsize=(9.5, 4.2))
+    _draw_sml_fit(results, left, right)
     fig.suptitle("Fitted line versus CAPM theory")
+    return _save(fig, output_path)
+
+
+def plot_capm_diagnostics(results: dict, output_path: str | Path) -> Path:
+    """One figure for the Stage-2 diagnostics: alpha t stats, SML slope, intercept."""
+    apply_theme()
+    fig, axes = plt.subplots(1, 3, figsize=(15.5, 4.4), layout="constrained")
+    _draw_grs(results, axes[0])
+    _draw_sml_fit(results, axes[1], axes[2])
+    fig.suptitle("CAPM diagnostics", fontweight="bold")
     return _save(fig, output_path)
 
 
@@ -599,24 +619,16 @@ def plot_proxy_shift(
 
 
 # ------------------------------------------------------------- Stage 3 factors
-def plot_alpha_comparison(
+def _draw_alpha_comparison(
     alphas: pd.DataFrame,
     summary: pd.DataFrame | None,
-    output_path: str | Path,
-    title: str = "Alphas before and after factors",
-) -> Path:
-    """Dumbbell chart: each asset's alpha under every factor model.
-
-    Assets are ordered by the first model's alpha (usually the CAPM), a thin
-    line marks the spread between the smallest and largest alpha, and the legend
-    reports each model's mean absolute alpha and significant count.
-    """
-    apply_theme()
+    axis: plt.Axes,
+    title: str,
+) -> None:
+    """Draw the per-asset alpha dumbbells for one market onto ``axis``."""
     models = list(alphas.columns)
     order = alphas[models[0]].sort_values().index
     positions = np.arange(len(order))
-
-    fig, axis = plt.subplots(figsize=(9.5, max(5.0, 0.26 * len(order))))
     for position, asset in zip(positions, order, strict=True):
         low, high = float(alphas.loc[asset].min()), float(alphas.loc[asset].max())
         axis.plot(
@@ -645,6 +657,45 @@ def plot_alpha_comparison(
     axis.set_xlabel("monthly alpha")
     axis.set_title(title)
     axis.legend(loc="best", fontsize=8)
+
+
+def plot_alpha_comparison(
+    alphas: pd.DataFrame,
+    summary: pd.DataFrame | None,
+    output_path: str | Path,
+    title: str = "Alphas before and after factors",
+) -> Path:
+    """Dumbbell chart: each asset's alpha under every factor model.
+
+    Assets are ordered by the first model's alpha (usually the CAPM), a thin
+    line marks the spread between the smallest and largest alpha, and the legend
+    reports each model's mean absolute alpha and significant count.
+    """
+    apply_theme()
+    fig, axis = plt.subplots(figsize=(9.5, max(5.0, 0.26 * len(alphas))))
+    _draw_alpha_comparison(alphas, summary, axis, title)
+    return _save(fig, output_path)
+
+
+def plot_alpha_comparison_paired(results: dict, output_path: str | Path) -> Path:
+    """Alpha dumbbells, one market per panel.
+
+    ``results`` maps a universe name to a :class:`FactorAnalysisResult` (any
+    object with ``alphas`` and ``summary``), so the two markets are read side by
+    side on their own asset scales.
+    """
+    apply_theme()
+    names = list(results)
+    height = max(max(5.0, 0.26 * len(results[name].alphas)) for name in names)
+    fig, axes = plt.subplots(
+        1, len(names), figsize=(6.7 * len(names), height), layout="constrained"
+    )
+    axes = np.atleast_1d(axes)
+    for axis, name in zip(axes, names, strict=True):
+        _draw_alpha_comparison(
+            results[name].alphas, results[name].summary, axis, _market_label(name)
+        )
+    fig.suptitle("Alphas before and after factors", fontweight="bold")
     return _save(fig, output_path)
 
 
