@@ -7,6 +7,7 @@ return index and falls back to a constant outside the factor file's coverage.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -14,7 +15,9 @@ import pandas as pd
 from .. import config
 
 __all__ = [
+    "LongHistory",
     "load_ff3",
+    "load_long_history",
     "monthly_rf",
     "to_period_index",
 ]
@@ -45,6 +48,28 @@ def load_ff3(
     if not as_decimals:
         frame = frame / 100.0
     return frame
+
+
+@dataclass(frozen=True)
+class LongHistory:
+    """Ken French's long US history: 10 industries and the factors to test against.
+
+    ``industries`` are value-weighted monthly returns from 1963-07; ``factors``
+    holds ``Mkt-RF``, ``SMB``, ``HML``, ``RF`` and ``Mom`` from 1926-07 (``Mom``
+    from 1927-01).  Every frame is in decimals on a monthly ``PeriodIndex``.
+    """
+
+    industries: pd.DataFrame
+    factors: pd.DataFrame
+
+
+def load_long_history(data_dir: str | Path | None = None) -> LongHistory:
+    """Load the committed long-history files (see :data:`config.LONG_HISTORY`)."""
+    root = Path(data_dir) if data_dir is not None else config.DATA_DIR
+    files = config.LONG_HISTORY
+    industries = load_ff3(root / files["industries"])
+    factors = load_ff3(root / files["ff3"]).join(load_ff3(root / files["momentum"]))
+    return LongHistory(industries=industries, factors=factors)
 
 
 def monthly_rf(

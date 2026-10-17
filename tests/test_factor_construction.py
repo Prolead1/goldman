@@ -9,6 +9,7 @@ import pytest
 from goldman.analysis.factor_construction import (
     build_self_factors,
     long_short_spread,
+    long_short_weights,
     momentum_factor,
     momentum_signal,
     size_factor,
@@ -105,3 +106,18 @@ def test_build_self_factors_columns_and_requires_source():
     assert factors.index.equals(returns.index)
     with pytest.raises(ValueError, match="value_weights"):
         build_self_factors(returns)
+
+
+def test_long_short_weights_reproduce_the_spread():
+    rng = np.random.default_rng(0)
+    returns = pd.DataFrame(rng.normal(0.008, 0.06, (60, 9)), index=_dates(60),
+                           columns=[f"a{i}" for i in range(9)])
+    signal = returns.shift(1)
+    weights = long_short_weights(returns, signal, n_quantiles=3)
+    spread = long_short_spread(returns, signal, n_quantiles=3)
+    rebuilt = (weights * returns).sum(axis=1).where(weights.abs().sum(axis=1) > 0)
+    pd.testing.assert_series_equal(rebuilt, spread, check_names=False, check_freq=False)
+    active = weights.abs().sum(axis=1) > 0
+    np.testing.assert_allclose(weights[active].sum(axis=1), 0.0, atol=1e-12)  # dollar neutral
+    with pytest.raises(ValueError):
+        long_short_weights(returns, signal, n_quantiles=1)

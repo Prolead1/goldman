@@ -124,6 +124,20 @@ UNIVERSES: dict[str, Universe] = {
 
 FF3_FILENAME = "ff3_monthly.csv"
 
+# Long US history for the industry momentum factor (report, after the memo's
+# factor-hunting section): Ken French's 10 value-weighted industry portfolios,
+# which cover every CRSP stock and so carry no survivorship bias, plus the
+# market, size, value and momentum factors to test it against.  The industries
+# start at 1963-07, where the Fama and French (1993) sample starts; the factors
+# go back to 1926.
+LONG_HISTORY_START = "1963-07-01"
+LONG_FACTORS_START = "1926-07-01"
+LONG_HISTORY: dict[str, str] = {
+    "industries": "long_ind10_vw_monthly.csv",
+    "ff3": "long_ff3_monthly.csv",
+    "momentum": "long_momentum_monthly.csv",
+}
+
 # Backwards-compatible filename map; the registry above is the source of truth.
 VALUE_WEIGHT_FILES: dict[str, str] = {
     u.name: u.value_weights_file for u in UNIVERSES.values() if u.value_weights_file

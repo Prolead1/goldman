@@ -7,7 +7,7 @@ monthly return panels and the aligned factor / risk-free series.
 from __future__ import annotations
 
 from .cleaning import build_sg_clean, load_corporate_actions, total_return_index
-from .factors import load_ff3, monthly_rf, to_period_index
+from .factors import LongHistory, load_ff3, load_long_history, monthly_rf, to_period_index
 from .market_caps import (
     build_value_weights_from_raw,
     load_value_weights,
@@ -24,7 +24,9 @@ __all__ = [
     "build_sg_clean",
     "load_corporate_actions",
     "total_return_index",
+    "LongHistory",
     "load_ff3",
+    "load_long_history",
     "monthly_rf",
     "to_period_index",
     "market_excess_returns",
