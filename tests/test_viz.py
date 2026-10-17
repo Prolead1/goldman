@@ -9,6 +9,7 @@ import pandas as pd
 
 from goldman import viz
 from goldman.analysis import (
+    Tradability,
     empirical_sml,
     run_robustness_analysis,
     security_characteristic_line,
@@ -255,6 +256,29 @@ def test_plot_paired_factor_and_oos(tmp_path):
     _assert_png(viz.plot_factor_cumulative_paired(factors, tmp_path / "factors_paired.png"))
     _assert_png(viz.plot_oos_growth_paired(growths, tmp_path / "growth_paired.png"))
     _assert_png(viz.plot_oos_sharpe_paired(summaries, tmp_path / "sharpe_paired.png"))
+
+
+def test_plot_factor_tradability(tmp_path):
+    index = pd.date_range("2010-01-01", periods=24, freq="MS")
+
+    def result(scale: float) -> Tradability:
+        factor = pd.Series(np.linspace(-0.03, 0.03, 24) * scale, index=index)
+        turnover = pd.Series(0.5, index=index)
+        wealth = (1.0 + factor).cumprod()
+        drawdown = wealth / wealth.cummax() - 1.0
+        return Tradability(
+            factor=factor,
+            turnover=turnover,
+            drawdown=drawdown,
+            break_even_bps=30.0 * scale,
+        )
+
+    scales = (("SMB", 1.0), ("WML", 2.0), ("LOWVOL", 1.5), ("REV", 0.8))
+    panels = {
+        "us": {name: result(scale) for name, scale in scales},
+        "sg": {name: result(scale * 0.5) for name, scale in scales},
+    }
+    _assert_png(viz.plot_factor_tradability(panels, tmp_path / "factor_tradability.png"))
 
 
 def test_plot_index_concentration(tmp_path):

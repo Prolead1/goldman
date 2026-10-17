@@ -25,15 +25,28 @@ exercise and is stated in the report.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 
 __all__ = [
     "long_short_spread",
     "long_short_weights",
+    "turnover",
     "size_factor",
+    "size_weights",
     "momentum_signal",
     "momentum_factor",
+    "low_volatility_factor",
+    "low_volatility_weights",
+    "reversal_factor",
+    "reversal_weights",
+    "Tradability",
+    "factor_tradability",
+    "momentum_tradability",
+    "size_tradability",
+    "self_factor_tradability",
     "build_self_factors",
 ]
 
@@ -127,6 +140,21 @@ def long_short_weights(
     return weights
 
 
+def turnover(weights: pd.DataFrame) -> pd.Series:
+    """Monthly turnover: the sum of absolute weight changes across assets.
+
+    The first month a portfolio is formed counts its full gross position.
+    Drift between rebalances is ignored, which slightly understates the trades.
+    """
+    held = weights.fillna(0.0)
+    active = held.abs().sum(axis=1) > 0
+    change = held.diff().abs().sum(axis=1)
+    first = active.idxmax() if active.any() else None
+    if first is not None:
+        change.loc[first] = held.loc[first].abs().sum()
+    return change.where(active | active.shift(1, fill_value=False)).rename("turnover")
+
+
 def size_factor(
     returns: pd.DataFrame,
     value_weights: pd.DataFrame,
@@ -144,6 +172,24 @@ def size_factor(
     lagged = weights.shift(1)
     spread = long_short_spread(returns, lagged, n_quantiles=n_quantiles, long_high=False)
     return spread.rename("SMB")
+
+
+def size_weights(
+    returns: pd.DataFrame,
+    value_weights: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+) -> pd.DataFrame:
+    """The holdings behind :func:`size_factor`, one row per month.
+
+    Mirrors :func:`size_factor`: the value weights are shifted one month and
+    the smallest third is held long, so ``(weights * returns).sum(axis=1)``
+    reproduces SMB.  The weights are what turnover and trading costs are
+    measured on.
+    """
+    weights = value_weights.reindex(index=returns.index, columns=returns.columns)
+    lagged = weights.shift(1)
+    return long_short_weights(returns, lagged, n_quantiles=n_quantiles, long_high=False)
 
 
 def momentum_signal(
@@ -183,6 +229,55 @@ def momentum_factor(
     return spread.rename("WML")
 
 
+def low_volatility_factor(
+    returns: pd.DataFrame,
+    *,
+    window: int = 12,
+    n_quantiles: int = 3,
+) -> pd.Series:
+    """LOWVOL: long the calmest third, short the most volatile third.
+
+    The signal is each asset's standard deviation over months ``t-window`` to
+    ``t-1`` (the sort never sees the month it predicts); ``long_high=False``
+    puts the long leg on the lowest volatility.
+    """
+    signal = returns.shift(1).rolling(window, min_periods=window).std()
+    spread = long_short_spread(returns, signal, n_quantiles=n_quantiles, long_high=False)
+    return spread.rename("LOWVOL")
+
+
+def reversal_factor(
+    returns: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+) -> pd.Series:
+    """REV: long last month's losers, short last month's winners (1-month reversal)."""
+    spread = long_short_spread(returns, returns.shift(1), n_quantiles=n_quantiles, long_high=False)
+    return spread.rename("REV")
+
+
+def low_volatility_weights(
+    returns: pd.DataFrame,
+    *,
+    window: int = 12,
+    n_quantiles: int = 3,
+) -> pd.DataFrame:
+    """The holdings behind :func:`low_volatility_factor`, one row per month."""
+    signal = returns.shift(1).rolling(window, min_periods=window).std()
+    return long_short_weights(returns, signal, n_quantiles=n_quantiles, long_high=False)
+
+
+def reversal_weights(
+    returns: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+) -> pd.DataFrame:
+    """The holdings behind :func:`reversal_factor`, one row per month."""
+    return long_short_weights(
+        returns, returns.shift(1), n_quantiles=n_quantiles, long_high=False
+    )
+
+
 def build_self_factors(
     returns: pd.DataFrame,
     *,
@@ -213,7 +308,114 @@ def build_self_factors(
             "WML": momentum_factor(
                 returns, lookback=lookback, skip=skip, n_quantiles=n_quantiles
             ),
+            "LOWVOL": low_volatility_factor(returns, n_quantiles=n_quantiles),
+            "REV": reversal_factor(returns, n_quantiles=n_quantiles),
         }
     )
     factors.index.name = returns.index.name
     return factors
+
+
+@dataclass(frozen=True)
+class Tradability:
+    """Turnover, trading-cost sensitivity and drawdown of a momentum spread."""
+
+    factor: pd.Series
+    turnover: pd.Series
+    drawdown: pd.Series
+    break_even_bps: float
+
+    def cost_curve(self, costs_bps=(0, 10, 25, 50, 100)) -> pd.Series:
+        """Annualised mean return net of each per-unit-turnover cost.
+
+        A cost of ``c`` basis points is charged on turnover each month, so the
+        net mean is linear in ``c`` and reaches zero at :attr:`break_even_bps`.
+        """
+        costs = np.asarray(costs_bps, dtype=float)
+        annual = self.factor.mean() * 12 - self.turnover.mean() * costs / 1e4 * 12
+        return pd.Series(annual, index=costs, name="net_mean_annual")
+
+
+def factor_tradability(
+    returns: pd.DataFrame,
+    weights: pd.DataFrame,
+    *,
+    name: str = "factor",
+) -> Tradability:
+    """Turnover, cost sensitivity and drawdown of a long-short factor.
+
+    ``weights`` are the holdings behind the factor (see
+    :func:`long_short_weights` and :func:`size_weights`); the factor is rebuilt
+    from them, so passing the weights that produced it changes nothing.
+    """
+    active = weights.abs().sum(axis=1) > 0
+    factor = (weights * returns).sum(axis=1).where(active).dropna().rename(name)
+    traded = turnover(weights).reindex(factor.index).rename("turnover")
+    wealth = (1.0 + factor).cumprod()
+    drawdown = (wealth / wealth.cummax() - 1.0).rename("drawdown")
+    break_even = float(factor.mean() / traded.mean() * 1e4)
+    return Tradability(
+        factor=factor,
+        turnover=traded,
+        drawdown=drawdown,
+        break_even_bps=break_even,
+    )
+
+
+def momentum_tradability(
+    returns: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+    lookback: int = 12,
+    skip: int = 1,
+) -> Tradability:
+    """Tradability of the self-built WML spread (12-1 momentum).
+
+    Uses :func:`momentum_signal` and :func:`long_short_weights` - the same code
+    path that builds ``WML`` in :func:`build_self_factors` - so the factor here
+    is exactly the reported one and the extra output is only what it costs to
+    trade it.
+    """
+    signal = momentum_signal(returns, lookback=lookback, skip=skip)
+    weights = long_short_weights(returns, signal, n_quantiles=n_quantiles, long_high=True)
+    return factor_tradability(returns, weights, name="WML")
+
+
+def size_tradability(
+    returns: pd.DataFrame,
+    value_weights: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+) -> Tradability:
+    """Tradability of the self-built SMB spread (lagged point-in-time size)."""
+    weights = size_weights(returns, value_weights, n_quantiles=n_quantiles)
+    return factor_tradability(returns, weights, name="SMB")
+
+
+def self_factor_tradability(
+    returns: pd.DataFrame,
+    value_weights: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+    lookback: int = 12,
+    skip: int = 1,
+) -> dict[str, Tradability]:
+    """Tradability of both self-built factors: ``{"SMB": ..., "WML": ...}``.
+
+    ``value_weights`` are the committed point-in-time capitalisation weights;
+    both factors are built exactly as :func:`build_self_factors` builds them.
+    """
+    return {
+        "SMB": size_tradability(returns, value_weights, n_quantiles=n_quantiles),
+        "WML": momentum_tradability(
+            returns, n_quantiles=n_quantiles, lookback=lookback, skip=skip
+        ),
+        "LOWVOL": factor_tradability(
+            returns,
+            low_volatility_weights(returns, n_quantiles=n_quantiles),
+            name="LOWVOL",
+        ),
+        "REV": factor_tradability(
+            returns, reversal_weights(returns, n_quantiles=n_quantiles), name="REV"
+        ),
+    }
