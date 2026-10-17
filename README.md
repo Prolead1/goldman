@@ -44,7 +44,8 @@ swapping the market proxy is a single argument.
 │   └── report.ipynb            # the report + reproducible entry point
 ├── tests/                      # pytest suite for the math and loaders
 ├── scripts/
-│   └── audit_yahoo_prices.py   # network check of the price files vs raw Yahoo data
+│   ├── audit_yahoo_prices.py   # network check of the price files vs raw Yahoo data
+│   └── export_report_pdf.py    # compact A4 PDF export of the report notebook
 ├── data/                       # raw cached CSVs (committed)
 │   ├── raw/<universe>/        # per-ticker prices + shares cache
 │   ├── raw/sg_daily/          # SG daily cache: Yahoo close/dividends + SGX price
@@ -70,7 +71,11 @@ references and reproducibility. Every table and figure in it
 is generated from the committed data when the notebook is run top to bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
 throughout as a cross-market check. Code cells are tagged `hide_input`, so a
 report export can hide them, e.g.
-`uv run jupyter nbconvert --to html --no-input notebooks/report.ipynb`.
+`uv run jupyter nbconvert --to html --no-input notebooks/report.ipynb`. For the
+page-limited PDF (body 10 pages, appendix after it), run
+`uv run --with playwright python scripts/export_report_pdf.py`, which writes
+`report.pdf` at the repo root with centred, unbroken tables and caption-sized
+takeaways.
 
 Network fetchers need the optional `data` extra and open internet; they run
 only when invoked — nothing imports them:
