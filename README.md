@@ -44,7 +44,8 @@ swapping the market proxy is a single argument.
 │   └── report.ipynb            # the report + reproducible entry point
 ├── tests/                      # pytest suite for the math and loaders
 ├── scripts/
-│   └── audit_yahoo_prices.py   # network check of the price files vs raw Yahoo data
+│   ├── audit_yahoo_prices.py   # network check of the price files vs raw Yahoo data
+│   └── export_report_pdf.py    # compact A4 PDF export of the report notebook
 ├── data/                       # raw cached CSVs (committed)
 │   ├── raw/<universe>/        # per-ticker prices + shares cache
 │   ├── raw/sg_daily/          # SG daily cache: Yahoo close/dividends + SGX price
@@ -63,14 +64,20 @@ uv run ruff check .
 
 `notebooks/report.ipynb` is **both the written report and the reproducible entry
 point**: it is organised as a report (executive summary, methodology, Stage 1,
-Stage 2, Stage 3, Roll robustness, and the Stage-4 memo, which carries the
-out-of-sample validation and the Roll exhibit), closing with an appendix for the
-contribution statement, AI-tool acknowledgement, data sources, references and
-reproducibility. Every table and figure in it
+Stage 2, Stage 3, and the Stage-4 memo, which carries the out-of-sample
+validation, the inference checks and the Roll's-critique exhibit), closing with an
+appendix for the contribution statement, AI-tool acknowledgement, data sources,
+references and reproducibility. Every table and figure in it
 is generated from the committed data when the notebook is run top to bottom. The primary universe is the US (`PRIMARY = "us"`); Singapore is carried
 throughout as a cross-market check. Code cells are tagged `hide_input`, so a
 report export can hide them, e.g.
-`uv run jupyter nbconvert --to html --no-input notebooks/report.ipynb`.
+`uv run jupyter nbconvert --to html --no-input notebooks/report.ipynb`. For the
+page-limited PDF (body under ten pages, appendix after it), run
+`uv sync --extra notebook --extra pdf` once and then
+`uv run python scripts/export_report_pdf.py` (add `--execute` to run the
+notebook first). It writes `report.pdf` at the repo
+root with centred, unbroken tables, caption-sized takeaways and full-width
+figures, and prints the body/appendix page split.
 
 Network fetchers need the optional `data` extra and open internet; they run
 only when invoked — nothing imports them:
@@ -179,8 +186,10 @@ rebuild) are made once, in `src/goldman/data/`.
   value weights. Its returns are unaffected.
 - The SG list is *approximately* the STI; verify current constituents before
   using value weights.
-- Both universes are **today's members backfilled ten years** — the
-  survivorship bias the handout asks you to acknowledge and discuss.
+- Both universes are **today's members backfilled ten years**. The report treats
+  this survivorship as its main finding rather than a caveat: the value-weighted
+  index is the survivors' own portfolio, so beating it on this universe is
+  unreasonable by construction, and the factor tests have no loser leg to sort.
 - Value weights are **point-in-time**: `market cap(t) = split-unadjusted
   close(t) x shares outstanding(t)`, with shares forward-filled from their
   report dates, so no month uses a future share count. The weight CSV is long
@@ -217,8 +226,8 @@ are pinned in `pyproject.toml` / `uv.lock`.
 
 Section 7 also runs `analysis/robust_inference.py` and `analysis/sensitivity.py`
 against the existing Stage-2/3 model inputs. Exhibit 5 compares ordinary and
-Newey-West standard errors at 0, 3 and 6 monthly lags; the numerical takeaway
-is generated from the same results. Per-asset p-values, summary counts, exact
+Newey-West standard errors at 0, 3 and 6 monthly lags; the takeaway reports
+those counts. Per-asset p-values, summary counts, exact
 sample dates, data hashes and package versions are saved under
 `outputs/inference_robustness/`. To verify a summary count, count the per-asset
 p-values below 0.05 in `inference_flags.csv` for the corresponding model and

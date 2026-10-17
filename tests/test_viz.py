@@ -106,6 +106,21 @@ def test_plot_sml_fit(tmp_path):
     _assert_png(viz.plot_sml_fit(results, tmp_path / "fit.png"))
 
 
+def test_plot_capm_diagnostics(tmp_path):
+    def result(slope, theory, intercept, t_stats, p_value):
+        return SimpleNamespace(
+            fit=SimpleNamespace(slope=slope, theoretical_slope=theory, intercept=intercept),
+            table=pd.DataFrame({"t_alpha": t_stats}),
+            grs={"p_value": p_value},
+        )
+
+    results = {
+        "us": result(0.016, 0.019, 0.0004, [-2.1, -1.0, 0.5, 2.4, 0.1], 0.47),
+        "sg": result(0.018, 0.014, -0.006, [-2.6, -1.5, 0.2, 1.9, 2.2], 0.09),
+    }
+    _assert_png(viz.plot_capm_diagnostics(results, tmp_path / "capm_diagnostics.png"))
+
+
 def test_plot_proxy_comparison(tmp_path):
     index = ["a", "b", "c"]
     results = {
@@ -152,6 +167,23 @@ def test_plot_alpha_comparison(tmp_path):
         index=["CAPM", "Two-factor"],
     )
     _assert_png(viz.plot_alpha_comparison(alphas, summary, tmp_path / "alphas.png"))
+
+
+def test_plot_alpha_comparison_paired(tmp_path):
+    index = list("abcd")
+    alphas = pd.DataFrame(
+        {"CAPM": [0.010, -0.004, 0.002, 0.006], "Two-factor": [0.002, -0.001, 0.001, -0.003]},
+        index=index,
+    )
+    summary = pd.DataFrame(
+        {"mean |alpha|": [0.0055, 0.00175], "alphas p<0.05": [1, 0]},
+        index=["CAPM", "Two-factor"],
+    )
+    results = {
+        "us": SimpleNamespace(alphas=alphas, summary=summary),
+        "sg": SimpleNamespace(alphas=alphas * 0.5, summary=summary),
+    }
+    _assert_png(viz.plot_alpha_comparison_paired(results, tmp_path / "alphas_paired.png"))
 
 
 def test_plot_factor_cumulative(tmp_path):
@@ -279,6 +311,26 @@ def test_plot_factor_tradability(tmp_path):
         "sg": {name: result(scale * 0.5) for name, scale in scales},
     }
     _assert_png(viz.plot_factor_tradability(panels, tmp_path / "factor_tradability.png"))
+
+
+def test_plot_factor_cumulative_overview(tmp_path):
+    index = pd.date_range("2010-01-01", periods=24, freq="MS")
+    self_built = {
+        universe: pd.DataFrame(
+            {"SMB": np.linspace(-0.02, 0.03, 24), "WML": np.linspace(-0.01, 0.04, 24)},
+            index=index,
+        )
+        for universe in ("us", "sg")
+    }
+    reference = pd.DataFrame(
+        {"SMB": np.linspace(-0.01, 0.02, 24), "HML": np.linspace(-0.02, 0.01, 24)},
+        index=index,
+    )
+    _assert_png(
+        viz.plot_factor_cumulative_overview(
+            self_built, reference, tmp_path / "factor_overview.png"
+        )
+    )
 
 
 def test_plot_index_concentration(tmp_path):
