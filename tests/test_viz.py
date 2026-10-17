@@ -281,6 +281,26 @@ def test_plot_factor_tradability(tmp_path):
     _assert_png(viz.plot_factor_tradability(panels, tmp_path / "factor_tradability.png"))
 
 
+def test_plot_factor_cumulative_overview(tmp_path):
+    index = pd.date_range("2010-01-01", periods=24, freq="MS")
+    self_built = {
+        universe: pd.DataFrame(
+            {"SMB": np.linspace(-0.02, 0.03, 24), "WML": np.linspace(-0.01, 0.04, 24)},
+            index=index,
+        )
+        for universe in ("us", "sg")
+    }
+    reference = pd.DataFrame(
+        {"SMB": np.linspace(-0.01, 0.02, 24), "HML": np.linspace(-0.02, 0.01, 24)},
+        index=index,
+    )
+    _assert_png(
+        viz.plot_factor_cumulative_overview(
+            self_built, reference, tmp_path / "factor_overview.png"
+        )
+    )
+
+
 def test_plot_index_concentration(tmp_path):
     index = pd.date_range("2010-01-01", periods=12, freq="MS")
 

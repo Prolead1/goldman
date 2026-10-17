@@ -50,6 +50,7 @@ __all__ = [
     "plot_alpha_intervals_paired",
     "plot_sml_paired",
     "plot_factor_cumulative_paired",
+    "plot_factor_cumulative_overview",
     "plot_oos_growth_paired",
     "plot_oos_sharpe_paired",
     "plot_index_concentration",
@@ -96,6 +97,19 @@ OOS_COLORS = {
 }
 #: Benchmarks are drawn heavier so the estimated strategies read as challengers.
 OOS_EMPHASIS = {"index": OOS_COLORS["index"], "equal_weight": OOS_COLORS["equal_weight"]}
+#: One colour per self-built factor, shared by the cumulative and tradability exhibits.
+FACTOR_COLORS = {
+    "SMB": COLORS["accent"],
+    "WML": COLORS["long"],
+    "LOWVOL": COLORS["positive"],
+    "REV": COLORS["short"],
+}
+FACTOR_LABELS = {
+    "SMB": "size (SMB)",
+    "WML": "momentum (WML)",
+    "LOWVOL": "low vol (LOWVOL)",
+    "REV": "reversal (REV)",
+}
 
 
 def apply_theme(dark: bool = True, context: str = "notebook") -> None:
@@ -652,7 +666,7 @@ def plot_factor_cumulative(
             cumulative.index,
             cumulative.to_numpy(),
             lw=2.0,
-            color=_color(name, index),
+            color=FACTOR_COLORS.get(name, _color(name, index)),
             label=name,
         )
     axis.axhline(1.0, lw=0.8, color=COLORS["muted"])
@@ -849,6 +863,32 @@ def plot_factor_cumulative_paired(factors_by_universe, output_path: str | Path) 
     )
 
 
+def plot_factor_cumulative_overview(
+    self_built: dict[str, pd.DataFrame],
+    reference: pd.DataFrame,
+    output_path: str | Path,
+) -> Path:
+    """Each market's self-built factors, plus the downloaded US factors as a panel.
+
+    ``self_built`` maps a universe name to its date-by-factor frame (one panel
+    each); ``reference`` is the Fama-French benchmark panel, added last so our
+    own construction can be read against the library version.  Each panel
+    compounds its factors independently, so the panels compare shapes, not
+    levels.
+    """
+    apply_theme()
+    panels = [(name, frame, _market_label(name)) for name, frame in self_built.items()]
+    panels.append(("reference", reference, "Fama–French (US)"))
+    fig, axes = plt.subplots(
+        1, len(panels), figsize=(6.4 * len(panels), 5.2), layout="constrained"
+    )
+    axes = np.atleast_1d(axes)
+    for axis, (_, frame, title) in zip(axes, panels, strict=True):
+        plot_factor_cumulative(frame, axis=axis, title=title)
+    fig.suptitle("Cumulative factor returns", fontweight="bold")
+    return _save(fig, output_path)
+
+
 def plot_oos_growth_paired(growths, output_path: str | Path) -> Path:
     """Out-of-sample growth paths, one market per panel."""
     return _paired_panels(
@@ -1016,21 +1056,6 @@ def plot_industry_momentum(
         title += " (shaded: the decade our data cover)"
     fig.suptitle(title, fontweight="bold")
     return _save(fig, output_path)
-
-
-#: One colour per self-built factor in the tradability exhibit.
-FACTOR_COLORS = {
-    "SMB": COLORS["accent"],
-    "WML": COLORS["long"],
-    "LOWVOL": COLORS["positive"],
-    "REV": COLORS["short"],
-}
-FACTOR_LABELS = {
-    "SMB": "size (SMB)",
-    "WML": "momentum (WML)",
-    "LOWVOL": "low vol (LOWVOL)",
-    "REV": "reversal (REV)",
-}
 
 
 def plot_factor_tradability(
