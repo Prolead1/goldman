@@ -30,6 +30,7 @@ import pandas as pd
 
 __all__ = [
     "long_short_spread",
+    "long_short_weights",
     "size_factor",
     "momentum_signal",
     "momentum_factor",
@@ -89,6 +90,41 @@ def long_short_spread(
 
     result = pd.Series(values, name="spread").sort_index()
     return result
+
+
+def long_short_weights(
+    returns: pd.DataFrame,
+    signal: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+    long_high: bool = True,
+) -> pd.DataFrame:
+    """The holdings behind :func:`long_short_spread`, one row per month.
+
+    Each long name carries ``+1/leg`` and each short name ``-1/leg``, so
+    ``(weights * returns).sum(axis=1)`` reproduces the spread.  Months the
+    spread leaves as ``NaN`` are all-zero rows.  The weights are what turnover
+    and trading costs are measured on.
+    """
+    if n_quantiles < 2:
+        raise ValueError("n_quantiles must be at least 2.")
+
+    weights = pd.DataFrame(0.0, index=returns.index, columns=returns.columns)
+    for date in returns.index:
+        if date not in signal.index:
+            continue
+        scores = signal.loc[date].dropna()
+        scores = scores[scores.index.isin(returns.columns)]
+        scores = scores[returns.loc[date, scores.index].notna()]
+        leg = len(scores) // n_quantiles
+        if leg < 1 or len(scores) < 2 * leg:
+            continue
+        ordered = scores.sort_values(kind="stable")
+        low, high = ordered.index[:leg], ordered.index[-leg:]
+        long_leg, short_leg = (high, low) if long_high else (low, high)
+        weights.loc[date, long_leg] = 1.0 / leg
+        weights.loc[date, short_leg] = -1.0 / leg
+    return weights
 
 
 def size_factor(

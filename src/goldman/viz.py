@@ -53,6 +53,7 @@ __all__ = [
     "plot_oos_growth_paired",
     "plot_oos_sharpe_paired",
     "plot_index_concentration",
+    "plot_industry_momentum",
 ]
 
 COLORS = {
@@ -928,5 +929,89 @@ def plot_index_concentration(
     right.set_title("Top-five weight through time")
     right.legend(loc="lower right", fontsize=8)
 
+    fig.suptitle(title, fontweight="bold")
+    return _save(fig, output_path)
+
+
+# ---------------------------------------------------------- industry momentum
+INDUSTRY_COLORS = {"IndMom": COLORS["accent"], "Mom": COLORS["long"], "Mkt-RF": COLORS["theory"]}
+INDUSTRY_LABELS = {
+    "IndMom": "industry momentum (ours)",
+    "Mom": "Ken French stock momentum",
+    "Mkt-RF": "market excess return",
+}
+
+
+def plot_industry_momentum(
+    panel: pd.DataFrame,
+    output_path: str | Path,
+    *,
+    window: int = 120,
+    highlight: tuple[str, str] | None = None,
+) -> Path:
+    """Sixty years of momentum: growth of 1 unit and the rolling t-statistic.
+
+    ``panel`` holds monthly ``IndMom``, ``Mom`` and ``Mkt-RF`` on a
+    ``DatetimeIndex``.  The left panel compounds each on a log scale; the right
+    plots the t-statistic of each factor's mean over the trailing ``window``
+    months, the evidence a ten-year sample like ours would give.  ``highlight``
+    shades the months our own data cover.
+    """
+    apply_theme()
+    panel = panel.dropna()
+    fig, axes = plt.subplots(1, 2, figsize=(14.5, 5.2), layout="constrained")
+
+    growth = (1.0 + panel).cumprod()
+    finals = growth.iloc[-1].sort_values()
+    # Push end labels apart when two lines finish close together on the log axis.
+    nudge = dict.fromkeys(finals.index, 0)
+    for low, high in zip(finals.index[:-1], finals.index[1:], strict=True):
+        if np.log10(finals[high] / finals[low]) < 0.08:
+            nudge[low], nudge[high] = nudge[low] - 6, nudge[high] + 6
+    for name in growth.columns:
+        axes[0].plot(
+            growth.index,
+            growth[name].to_numpy(),
+            lw=2.4 if name == "IndMom" else 1.5,
+            ls="--" if name == "Mkt-RF" else "-",
+            color=INDUSTRY_COLORS.get(name, COLORS["muted"]),
+            label=INDUSTRY_LABELS.get(name, name),
+        )
+        axes[0].annotate(
+            f"{finals[name]:.1f}x",
+            (growth.index[-1], float(finals[name])),
+            fontsize=8,
+            xytext=(5, nudge[name]),
+            textcoords="offset points",
+            va="center",
+            color=INDUSTRY_COLORS.get(name, COLORS["muted"]),
+        )
+    axes[0].set_yscale("log")
+    axes[0].set_ylabel("growth of 1 unit (log scale)")
+    axes[0].set_title(f"Growth of 1 unit, {panel.index[0]:%Y-%m} to {panel.index[-1]:%Y-%m}")
+    axes[0].legend(loc="upper left", fontsize=8)
+
+    for name in ("IndMom", "Mom"):
+        series = panel[name]
+        t_stat = series.rolling(window).mean() / series.rolling(window).std() * np.sqrt(window)
+        axes[1].plot(
+            t_stat.index,
+            t_stat.to_numpy(),
+            lw=2.2 if name == "IndMom" else 1.5,
+            color=INDUSTRY_COLORS[name],
+            label=INDUSTRY_LABELS[name],
+        )
+    axes[1].axhline(1.96, color=COLORS["short"], lw=1.0, ls="--", label="t = 1.96")
+    axes[1].axhline(0.0, color="white", lw=0.8)
+    axes[1].set_ylabel(f"t-statistic of the mean, trailing {window // 12} years")
+    axes[1].set_title(f"What a {window // 12}-year sample would have said")
+    axes[1].legend(loc="upper right", fontsize=8)
+
+    title = "Industry momentum on 10 Ken French industries"
+    if highlight is not None:
+        start, end = pd.Timestamp(highlight[0]), pd.Timestamp(highlight[1])
+        for axis in axes:
+            axis.axvspan(start, end, color=COLORS["muted"], alpha=0.18, lw=0)
+        title += " (shaded: the decade our data cover)"
     fig.suptitle(title, fontweight="bold")
     return _save(fig, output_path)

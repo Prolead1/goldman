@@ -14,6 +14,7 @@ Usage::
     uv run python -m goldman.data.fetch caps-build   # raw cache -> value weights (offline)
     uv run python -m goldman.data.fetch sg-daily     # network -> SG daily raw cache + FX
     uv run python -m goldman.data.fetch sg-build     # SG daily cache -> clean SG files (offline)
+    uv run python -m goldman.data.fetch long-history # Ken French 10 industries + factors since 1926
     uv run python -m goldman.data.fetch all          # everything
 
 Market caps are point-in-time: ``split-unadjusted close(t) x shares(t)`` with
@@ -141,6 +142,37 @@ def fetch_ff3(report: list[str]) -> None:
             f"[ff3] FAILED: {exc!r} — download the CSV manually from "
             "Ken French's data library page instead"
         )
+
+
+def fetch_long_history() -> int:
+    """Download Ken French's 10 industries (value-weighted) and the long factors.
+
+    Writes the three :data:`config.LONG_HISTORY` files in decimals: industries
+    from :data:`config.LONG_HISTORY_START`, the FF3 factors + RF and the
+    momentum factor from :data:`config.LONG_FACTORS_START`.  Ken French marks
+    missing values with -99.99; the download is refused if any appear.
+    """
+    from pandas_datareader import data as pdr
+
+    files = config.LONG_HISTORY
+    tables = {
+        "industries": ("10_Industry_Portfolios", config.LONG_HISTORY_START),
+        "ff3": ("F-F_Research_Data_Factors", config.LONG_FACTORS_START),
+        "momentum": ("F-F_Momentum_Factor", config.LONG_FACTORS_START),
+    }
+    for key, (name, start) in tables.items():
+        # Table 0 is the monthly series (value-weighted for the industries).
+        frame = pdr.DataReader(name, "famafrench", start=start, end=END)[0]
+        frame.columns = [c.strip() for c in frame.columns]
+        if (frame <= -99.99).any().any():
+            raise ValueError(f"{name}: Ken French missing-value marker (-99.99) present")
+        frame = frame / 100.0
+        frame.index = frame.index.strftime("%Y-%m")
+        frame.index.name = "Date"
+        frame.to_csv(config.DATA_DIR / files[key])
+        span = f"{frame.index[0]} .. {frame.index[-1]}"
+        print(f"[long-history] {files[key]}: {len(frame)} months, {span}")
+    return 0
 
 
 def download_prices_and_factors() -> int:
@@ -399,12 +431,16 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "stage",
         nargs="?",
-        choices=["all", "prices", "caps", "caps-fetch", "caps-build", "sg-daily", "sg-build"],
+        choices=[
+            "all", "prices", "caps", "caps-fetch", "caps-build", "sg-daily", "sg-build",
+            "long-history",
+        ],
         default="all",
         help=(
             "What to fetch: prices (prices + FF3), caps (both market-cap stages), "
             "caps-fetch (network -> raw cache), caps-build (offline), "
-            "sg-daily (network -> SG daily cache), sg-build (offline), all (default)."
+            "sg-daily (network -> SG daily cache), sg-build (offline), "
+            "long-history (Ken French industries + factors since 1926), all (default)."
         ),
     )
     parser.add_argument(
@@ -428,6 +464,8 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     if args.stage in {"all", "prices"}:
         download_prices_and_factors()
+    if args.stage in {"all", "long-history"}:
+        fetch_long_history()
     if args.stage == "all":
         # The SG daily cache must exist before the cap build, which for SG
         # rebuilds the clean prices and weights from it.

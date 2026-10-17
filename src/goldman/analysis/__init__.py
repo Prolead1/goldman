@@ -10,6 +10,7 @@ from . import (
     capm,
     factor_construction,
     factor_models,
+    industry_momentum,
     out_of_sample,
     portfolio,
     portfolio_choice,
@@ -28,6 +29,7 @@ from .capm import (
 from .factor_construction import (
     build_self_factors,
     long_short_spread,
+    long_short_weights,
     momentum_factor,
     momentum_signal,
     size_factor,
@@ -39,6 +41,7 @@ from .factor_models import (
     model_summary,
     run_factor_analysis,
 )
+from .industry_momentum import build_industry_momentum, industry_momentum_report
 from .out_of_sample import (
     OOS_BENCHMARKS,
     OutOfSampleResult,
@@ -78,6 +81,10 @@ from .robustness import (
 
 __all__ = [
     "capm",
+    "industry_momentum",
+    "build_industry_momentum",
+    "industry_momentum_report",
+    "long_short_weights",
     "factor_construction",
     "factor_models",
     "portfolio",
