@@ -863,28 +863,46 @@ def plot_factor_cumulative_paired(factors_by_universe, output_path: str | Path) 
     )
 
 
+#: Colours for the downloaded factors overlaid on the self-built US panel.
+REFERENCE_COLORS = {"SMB": COLORS["accent"], "HML": "#c084fc"}
+
+
 def plot_factor_cumulative_overview(
     self_built: dict[str, pd.DataFrame],
     reference: pd.DataFrame,
     output_path: str | Path,
 ) -> Path:
-    """Each market's self-built factors, plus the downloaded US factors as a panel.
+    """Self-built factor growth by market, with the US benchmark overlaid.
 
     ``self_built`` maps a universe name to its date-by-factor frame (one panel
-    each); ``reference`` is the Fama-French benchmark panel, added last so our
-    own construction can be read against the library version.  Each panel
-    compounds its factors independently, so the panels compare shapes, not
-    levels.
+    each).  ``reference`` (the Fama-French US factors) is drawn as dashed lines
+    on the United States panel, so our SMB can be read against the library SMB.
+    Each panel compounds its factors independently, so the panels compare
+    shapes, not levels.
     """
     apply_theme()
-    panels = [(name, frame, _market_label(name)) for name, frame in self_built.items()]
-    panels.append(("reference", reference, "Fama–French (US)"))
+    names = list(self_built)
     fig, axes = plt.subplots(
-        1, len(panels), figsize=(6.4 * len(panels), 5.2), layout="constrained"
+        1, len(names), figsize=(7.0 * len(names), 5.2), layout="constrained"
     )
     axes = np.atleast_1d(axes)
-    for axis, (_, frame, title) in zip(axes, panels, strict=True):
-        plot_factor_cumulative(frame, axis=axis, title=title)
+    for axis, name in zip(axes, names, strict=True):
+        plot_factor_cumulative(self_built[name], axis=axis, title=_market_label(name))
+        if name == "us":
+            for column in reference.columns:
+                series = reference[column].dropna()
+                if series.empty:
+                    continue
+                cumulative = (1.0 + series).cumprod()
+                axis.plot(
+                    cumulative.index,
+                    cumulative.to_numpy(),
+                    lw=1.4,
+                    ls="--",
+                    color=REFERENCE_COLORS.get(column, COLORS["muted"]),
+                    label=f"{column} (FF)",
+                )
+            axis.legend(loc="best")
     fig.suptitle("Cumulative factor returns", fontweight="bold")
     return _save(fig, output_path)
 
