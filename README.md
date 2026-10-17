@@ -33,7 +33,7 @@ swapping the market proxy is a single argument.
 │   │   ├── portfolio.py        # tangency weights, 1/N, subsample re-estimation
 │   │   ├── portfolio_choice.py # summary stats, weight chart, subsample drift
 │   │   ├── capm.py             # SCL regressions, empirical SML, GRS test
-│   │   ├── factor_construction.py  # self-built SMB/WML; turnover, cost and drawdown
+│   │   ├── factor_construction.py  # self-built SMB/WML; turnover, cost, drawdown
 │   │   ├── industry_momentum.py  # momentum on 10 Ken French industries, 1964-2026
 │   │   ├── factor_models.py    # multi-factor regressions, alpha comparison
 │   │   ├── robustness.py       # no-short and shrinkage variants
@@ -109,13 +109,13 @@ the `GOLDMAN_ROOT` environment variable if needed.
 |---|---|---|
 | `analysis/portfolio_choice.py` | Annualised summary statistics; the tangency portfolio `w ∝ Σ⁻¹μ_e`; comparison (value/1/N) weights; full- vs subsample re-estimation | `summary_stats.csv`, `tangency_weights.png`, `value_weights.csv`, `subsample_weights.csv` |
 | `analysis/capm.py` | Per-asset `α̂, β̂, t(α̂), R²`; the empirical vs theoretical SML; the GRS joint alpha test | `capm_<universe>_<proxy>_scl.csv`, `..._sml.png`, `..._summary.txt` |
-| `analysis/factor_construction.py` | Self-built SMB (lagged point-in-time size) and WML (12-1 momentum) long–short spreads; turnover, cost sensitivity and drawdown of WML (`momentum_tradability`) | `factor_cumulative_<universe>.png`, `momentum_tradability.csv` (US panel plots the downloaded Fama–French SMB/HML) |
+| `analysis/factor_construction.py` | Self-built SMB (lagged point-in-time size) and WML (12-1 momentum) long–short spreads; turnover, cost sensitivity and drawdown of both (`self_factor_tradability`) | `factor_cumulative_<universe>.png`, `factor_tradability.csv` (US panel plots the downloaded Fama–French SMB/HML) |
 | `analysis/industry_momentum.py` | Industry momentum (Moskowitz and Grinblatt 1999) on the 10 Ken French industries, 1964-07 to 2026-08: premium, CAPM and FF3 alphas, correlation with Ken French `Mom`, turnover and break-even cost, by sub-period | `industry_momentum.png` |
 | `analysis/factor_models.py` | Multi-factor SCL regressions; alphas before/after factors on a common sample; joint GRS | `factors_<universe>_alphas.csv`, `..._summary.csv`, `factors_<universe>_<model>_scl.csv`, `factors_<universe>_alpha_comparison.png` |
 | `analysis/robustness.py` | No-short maximum Sharpe, shrinkage of covariance and means, half sample stability, out of sample Sharpe | `robustness_<universe>_diagnostics.csv`, `..._weights.csv`, `robustness_<universe>.png` |
 | `analysis/out_of_sample.py` | Expanding-window walk-forward backtest: re-estimate the index, 1/N and the tangency variants each month, trade the next month; out-of-sample growth and Sharpe | `out_of_sample_<universe>_growth.png`, `out_of_sample_<universe>_sharpe.png` |
 | `data/markets.py` | Market proxy `R_M - R_f`: cap-weighted composite or FF `Mkt-RF` | — |
-| `viz.py` | The report's look (seaborn with the QuantumBlack dark theme) and one figure per story beat: correlation, risk/return, weights, drift, robustness, alphas, SML, GRS, proxy comparison, factor growth, momentum tradability, alpha comparison | `*.png` exhibits |
+| `viz.py` | The report's look (seaborn with the QuantumBlack dark theme) and one figure per story beat: correlation, risk/return, weights, drift, robustness, alphas, SML, GRS, proxy comparison, factor growth, size/momentum tradability, alpha comparison | `*.png` exhibits |
 
 Adding an analysis means adding a module under `src/goldman/analysis/` and a
 section in `notebooks/report.ipynb`; the notebook reproduces every stage top to

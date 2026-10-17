@@ -54,7 +54,7 @@ __all__ = [
     "plot_oos_sharpe_paired",
     "plot_index_concentration",
     "plot_industry_momentum",
-    "plot_momentum_tradability",
+    "plot_factor_tradability",
 ]
 
 COLORS = {
@@ -1018,59 +1018,71 @@ def plot_industry_momentum(
     return _save(fig, output_path)
 
 
-def plot_momentum_tradability(
+#: One colour per self-built factor in the tradability exhibit.
+FACTOR_COLORS = {"SMB": COLORS["accent"], "WML": COLORS["long"]}
+FACTOR_LABELS = {"SMB": "size (SMB)", "WML": "momentum (WML)"}
+
+
+def plot_factor_tradability(
     tradability,
     output_path: str | Path,
     *,
+    factors=("SMB", "WML"),
     costs_bps=(0, 10, 25, 50, 100),
 ) -> Path:
-    """What momentum keeps after costs, and how deep its drawdowns go.
+    """What the self-built factors keep after costs, and how deep they draw down.
 
-    ``tradability`` maps a universe name to a
-    :class:`goldman.analysis.factor_construction.Tradability`.  The left panel
-    traces the annualised mean of the spread net of a per-unit-turnover cost
-    and marks the break-even cost; the right panel shows the drawdown path.
+    ``tradability`` maps a universe name to a mapping of factor name to a
+    :class:`goldman.analysis.factor_construction.Tradability`.  Each market gets
+    its own column; the top row traces the annualised net mean against a
+    per-unit-turnover cost and marks each factor's break-even cost, the bottom
+    row shows drawdowns.  Both factors share a panel so the two markets and the
+    two factors can be read against each other.
     """
     apply_theme()
-    fig, axes = plt.subplots(1, 2, figsize=(14.5, 5.2), layout="constrained")
-    for index, (name, result) in enumerate(tradability.items()):
-        color = _color(name, index)
-        curve = result.cost_curve(costs_bps)
-        axes[0].plot(
-            curve.index,
-            curve.to_numpy() * 100,
-            marker="o",
-            lw=2.2,
-            color=color,
-            label=_market_label(name),
-        )
-        axes[0].scatter(
-            [result.break_even_bps], [0.0], color=color, edgecolor="white", zorder=5, s=55
-        )
-        axes[0].annotate(
-            f"break-even {result.break_even_bps:.0f} bp",
-            (result.break_even_bps, 0.0),
-            xytext=(6, 8),
-            textcoords="offset points",
-            fontsize=8,
-            color=color,
-        )
-        axes[1].plot(
-            result.drawdown.index,
-            result.drawdown.to_numpy() * 100,
-            lw=1.8,
-            color=color,
-            label=_market_label(name),
-        )
-    axes[0].axhline(0.0, color=COLORS["muted"], lw=0.9, ls="--")
-    axes[0].axvline(50.0, color=COLORS["accent"], lw=1.0, ls=":", label="50 bp")
-    axes[0].set_xlabel("cost per unit of turnover (bp)")
-    axes[0].set_ylabel("net annualised mean (%)")
-    axes[0].set_title("What the spread keeps after costs")
-    axes[0].legend(loc="best", fontsize=8)
-    axes[1].axhline(0.0, color=COLORS["muted"], lw=0.9)
-    axes[1].set_ylabel("drawdown (%)")
-    axes[1].set_title("Peak-to-trough drawdown")
-    axes[1].legend(loc="lower left", fontsize=8)
-    fig.suptitle("Tradability of the self-built momentum spread", fontweight="bold")
+    universes = list(tradability)
+    fig, axes = plt.subplots(
+        2, len(universes), figsize=(7.4 * len(universes), 8.6), layout="constrained"
+    )
+    axes = np.atleast_2d(axes)
+    for column, universe in enumerate(universes):
+        cost_axis, drawdown_axis = axes[0, column], axes[1, column]
+        for factor in factors:
+            result = tradability[universe][factor]
+            color = FACTOR_COLORS.get(factor, COLORS["muted"])
+            label = FACTOR_LABELS.get(factor, factor)
+            curve = result.cost_curve(costs_bps)
+            cost_axis.plot(
+                curve.index, curve.to_numpy() * 100, marker="o", lw=2.0, color=color, label=label
+            )
+            cost_axis.scatter(
+                [result.break_even_bps], [0.0], color=color, edgecolor="white", zorder=5, s=55
+            )
+            cost_axis.annotate(
+                f"{result.break_even_bps:.0f} bp",
+                (result.break_even_bps, 0.0),
+                xytext=(5, 8),
+                textcoords="offset points",
+                fontsize=8,
+                color=color,
+            )
+            drawdown_axis.plot(
+                result.drawdown.index,
+                result.drawdown.to_numpy() * 100,
+                lw=1.7,
+                color=color,
+                label=label,
+            )
+        cost_axis.axhline(0.0, color=COLORS["muted"], lw=0.9, ls="--")
+        cost_axis.axvline(50.0, color=COLORS["accent"], lw=1.0, ls=":", label="50 bp")
+        cost_axis.set_title(_market_label(universe))
+        cost_axis.set_xlabel("cost per unit of turnover (bp)")
+        cost_axis.set_ylabel("net annualised mean (%)")
+        cost_axis.legend(loc="upper right", fontsize=8)
+        drawdown_axis.axhline(0.0, color=COLORS["muted"], lw=0.9)
+        drawdown_axis.set_ylabel("drawdown (%)")
+        drawdown_axis.legend(loc="lower left", fontsize=8)
+    fig.suptitle(
+        "Tradability of the self-built size and momentum factors", fontweight="bold"
+    )
     return _save(fig, output_path)

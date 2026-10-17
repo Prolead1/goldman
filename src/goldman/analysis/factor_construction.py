@@ -35,10 +35,14 @@ __all__ = [
     "long_short_weights",
     "turnover",
     "size_factor",
+    "size_weights",
     "momentum_signal",
     "momentum_factor",
     "Tradability",
+    "factor_tradability",
     "momentum_tradability",
+    "size_tradability",
+    "self_factor_tradability",
     "build_self_factors",
 ]
 
@@ -166,6 +170,24 @@ def size_factor(
     return spread.rename("SMB")
 
 
+def size_weights(
+    returns: pd.DataFrame,
+    value_weights: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+) -> pd.DataFrame:
+    """The holdings behind :func:`size_factor`, one row per month.
+
+    Mirrors :func:`size_factor`: the value weights are shifted one month and
+    the smallest third is held long, so ``(weights * returns).sum(axis=1)``
+    reproduces SMB.  The weights are what turnover and trading costs are
+    measured on.
+    """
+    weights = value_weights.reindex(index=returns.index, columns=returns.columns)
+    lagged = weights.shift(1)
+    return long_short_weights(returns, lagged, n_quantiles=n_quantiles, long_high=False)
+
+
 def momentum_signal(
     returns: pd.DataFrame,
     *,
@@ -259,24 +281,20 @@ class Tradability:
         return pd.Series(annual, index=costs, name="net_mean_annual")
 
 
-def momentum_tradability(
+def factor_tradability(
     returns: pd.DataFrame,
+    weights: pd.DataFrame,
     *,
-    n_quantiles: int = 3,
-    lookback: int = 12,
-    skip: int = 1,
+    name: str = "factor",
 ) -> Tradability:
-    """Turnover, cost sensitivity and drawdown for the self-built WML spread.
+    """Turnover, cost sensitivity and drawdown of a long-short factor.
 
-    Uses :func:`momentum_signal` and :func:`long_short_weights` - the same code
-    path that builds ``WML`` in :func:`build_self_factors` - so the factor here
-    is exactly the reported one and the extra output is only what it costs to
-    trade it.
+    ``weights`` are the holdings behind the factor (see
+    :func:`long_short_weights` and :func:`size_weights`); the factor is rebuilt
+    from them, so passing the weights that produced it changes nothing.
     """
-    signal = momentum_signal(returns, lookback=lookback, skip=skip)
-    weights = long_short_weights(returns, signal, n_quantiles=n_quantiles, long_high=True)
     active = weights.abs().sum(axis=1) > 0
-    factor = (weights * returns).sum(axis=1).where(active).dropna().rename("WML")
+    factor = (weights * returns).sum(axis=1).where(active).dropna().rename(name)
     traded = turnover(weights).reindex(factor.index).rename("turnover")
     wealth = (1.0 + factor).cumprod()
     drawdown = (wealth / wealth.cummax() - 1.0).rename("drawdown")
@@ -287,3 +305,54 @@ def momentum_tradability(
         drawdown=drawdown,
         break_even_bps=break_even,
     )
+
+
+def momentum_tradability(
+    returns: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+    lookback: int = 12,
+    skip: int = 1,
+) -> Tradability:
+    """Tradability of the self-built WML spread (12-1 momentum).
+
+    Uses :func:`momentum_signal` and :func:`long_short_weights` - the same code
+    path that builds ``WML`` in :func:`build_self_factors` - so the factor here
+    is exactly the reported one and the extra output is only what it costs to
+    trade it.
+    """
+    signal = momentum_signal(returns, lookback=lookback, skip=skip)
+    weights = long_short_weights(returns, signal, n_quantiles=n_quantiles, long_high=True)
+    return factor_tradability(returns, weights, name="WML")
+
+
+def size_tradability(
+    returns: pd.DataFrame,
+    value_weights: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+) -> Tradability:
+    """Tradability of the self-built SMB spread (lagged point-in-time size)."""
+    weights = size_weights(returns, value_weights, n_quantiles=n_quantiles)
+    return factor_tradability(returns, weights, name="SMB")
+
+
+def self_factor_tradability(
+    returns: pd.DataFrame,
+    value_weights: pd.DataFrame,
+    *,
+    n_quantiles: int = 3,
+    lookback: int = 12,
+    skip: int = 1,
+) -> dict[str, Tradability]:
+    """Tradability of both self-built factors: ``{"SMB": ..., "WML": ...}``.
+
+    ``value_weights`` are the committed point-in-time capitalisation weights;
+    both factors are built exactly as :func:`build_self_factors` builds them.
+    """
+    return {
+        "SMB": size_tradability(returns, value_weights, n_quantiles=n_quantiles),
+        "WML": momentum_tradability(
+            returns, n_quantiles=n_quantiles, lookback=lookback, skip=skip
+        ),
+    }

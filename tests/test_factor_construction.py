@@ -13,6 +13,7 @@ from goldman.analysis.factor_construction import (
     momentum_factor,
     momentum_signal,
     momentum_tradability,
+    self_factor_tradability,
     size_factor,
     turnover,
 )
@@ -155,3 +156,26 @@ def test_momentum_tradability_matches_the_reported_factor():
     assert result.break_even_bps == pytest.approx(
         result.factor.mean() / result.turnover.mean() * 1e4
     )
+
+
+def test_self_factor_tradability_matches_smb_and_wml():
+    rng = np.random.default_rng(2)
+    returns = pd.DataFrame(
+        rng.normal(0.008, 0.06, (80, 9)), index=_dates(80), columns=[f"a{i}" for i in range(9)]
+    )
+    value_weights = pd.DataFrame(
+        rng.uniform(0.05, 0.3, (80, 9)), index=_dates(80), columns=[f"a{i}" for i in range(9)]
+    )
+    built = build_self_factors(returns, value_weights=value_weights)
+    results = self_factor_tradability(returns, value_weights)
+    assert set(results) == {"SMB", "WML"}
+    for factor in ("SMB", "WML"):
+        pd.testing.assert_series_equal(
+            results[factor].factor,
+            built[factor].dropna(),
+            check_names=False,
+            check_freq=False,
+        )
+        assert results[factor].break_even_bps == pytest.approx(
+            results[factor].factor.mean() / results[factor].turnover.mean() * 1e4
+        )

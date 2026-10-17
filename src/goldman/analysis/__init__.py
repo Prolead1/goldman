@@ -29,12 +29,16 @@ from .capm import (
 from .factor_construction import (
     Tradability,
     build_self_factors,
+    factor_tradability,
     long_short_spread,
     long_short_weights,
     momentum_factor,
     momentum_signal,
     momentum_tradability,
+    self_factor_tradability,
     size_factor,
+    size_tradability,
+    size_weights,
     turnover,
 )
 from .factor_models import (
@@ -109,6 +113,10 @@ __all__ = [
     "momentum_signal",
     "momentum_tradability",
     "Tradability",
+    "factor_tradability",
+    "self_factor_tradability",
+    "size_tradability",
+    "size_weights",
     "turnover",
     "run_factor_analysis",
     "size_factor",

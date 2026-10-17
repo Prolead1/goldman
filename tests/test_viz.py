@@ -258,22 +258,26 @@ def test_plot_paired_factor_and_oos(tmp_path):
     _assert_png(viz.plot_oos_sharpe_paired(summaries, tmp_path / "sharpe_paired.png"))
 
 
-def test_plot_momentum_tradability(tmp_path):
+def test_plot_factor_tradability(tmp_path):
     index = pd.date_range("2010-01-01", periods=24, freq="MS")
-    factor = pd.Series(np.linspace(-0.03, 0.03, 24), index=index)
-    turnover = pd.Series(0.5, index=index)
-    wealth = (1.0 + factor).cumprod()
-    drawdown = wealth / wealth.cummax() - 1.0
-    panels = {
-        name: Tradability(
-            factor=factor * scale,
+
+    def result(scale: float) -> Tradability:
+        factor = pd.Series(np.linspace(-0.03, 0.03, 24) * scale, index=index)
+        turnover = pd.Series(0.5, index=index)
+        wealth = (1.0 + factor).cumprod()
+        drawdown = wealth / wealth.cummax() - 1.0
+        return Tradability(
+            factor=factor,
             turnover=turnover,
             drawdown=drawdown,
             break_even_bps=30.0 * scale,
         )
-        for name, scale in (("us", 1.0), ("sg", 2.0))
+
+    panels = {
+        "us": {"SMB": result(1.0), "WML": result(2.0)},
+        "sg": {"SMB": result(0.5), "WML": result(1.5)},
     }
-    _assert_png(viz.plot_momentum_tradability(panels, tmp_path / "tradability.png"))
+    _assert_png(viz.plot_factor_tradability(panels, tmp_path / "factor_tradability.png"))
 
 
 def test_plot_index_concentration(tmp_path):
