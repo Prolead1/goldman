@@ -28,6 +28,7 @@ from pathlib import Path
 
 import nbformat
 from nbconvert import HTMLExporter
+from nbconvert.preprocessors import ExecutePreprocessor
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -188,10 +189,23 @@ def group_headings_with_exhibits(html: str) -> str:
     return "".join(output)
 
 
-def build_html(notebook: Path, destination: Path) -> None:
+def load_notebook(path: Path, execute: bool) -> nbformat.NotebookNode:
+    """Read the notebook, optionally running it top to bottom first."""
+    node = nbformat.read(path, as_version=4)
+    if execute:
+        ExecutePreprocessor(timeout=1800, kernel_name="python3").preprocess(
+            node, {"metadata": {"path": str(path.parent)}}
+        )
+        print(f"executed {path} (in memory; the notebook file is left unchanged)")
+    return node
+
+
+def build_html(notebook: Path, destination: Path, execute: bool = False) -> None:
     exporter = HTMLExporter()
     exporter.exclude_input = True
-    html, _ = exporter.from_notebook_node(ordered_notebook(nbformat.read(notebook, as_version=4)))
+    html, _ = exporter.from_notebook_node(
+        ordered_notebook(load_notebook(notebook, execute))
+    )
     html = html.replace(
         "<p><strong>Takeaway.</strong>",
         '<p class="takeaway"><strong>Takeaway.</strong>',
@@ -205,9 +219,21 @@ def render_pdf(source: Path, destination: Path) -> None:
 
     from playwright.async_api import async_playwright
 
+    async def launch_browser(playwright):
+        try:
+            return await playwright.chromium.launch(channel="chrome", headless=True)
+        except Exception:
+            try:
+                return await playwright.chromium.launch(headless=True)
+            except Exception as error:
+                raise RuntimeError(
+                    "No Chromium available: install Google Chrome or run "
+                    "`uv run playwright install chromium`."
+                ) from error
+
     async def run() -> None:
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(channel="chrome", headless=True)
+            browser = await launch_browser(playwright)
             page = await browser.new_page()
             await page.goto(source.resolve().as_uri(), wait_until="networkidle", timeout=180_000)
             try:
@@ -255,10 +281,15 @@ def main() -> None:
     parser.add_argument("--notebook", type=Path, default=ROOT / "notebooks" / "report.ipynb")
     parser.add_argument("--pdf", type=Path, default=ROOT / "report.pdf")
     parser.add_argument("--html", type=Path, default=ROOT / "outputs" / "report_print.html")
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="run the notebook top to bottom before exporting (regenerates outputs)",
+    )
     args = parser.parse_args()
 
     args.html.parent.mkdir(parents=True, exist_ok=True)
-    build_html(args.notebook, args.html)
+    build_html(args.notebook, args.html, execute=args.execute)
     render_pdf(args.html, args.pdf)
     report(args.pdf)
 

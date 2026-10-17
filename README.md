@@ -72,10 +72,12 @@ is generated from the committed data when the notebook is run top to bottom. The
 throughout as a cross-market check. Code cells are tagged `hide_input`, so a
 report export can hide them, e.g.
 `uv run jupyter nbconvert --to html --no-input notebooks/report.ipynb`. For the
-page-limited PDF (body 10 pages, appendix after it), run
-`uv run --with playwright python scripts/export_report_pdf.py`, which writes
-`report.pdf` at the repo root with centred, unbroken tables and caption-sized
-takeaways.
+page-limited PDF (body under ten pages, appendix after it), run
+`uv sync --extra notebook --extra pdf` once and then
+`uv run python scripts/export_report_pdf.py` (add `--execute` to run the
+notebook first). It writes `report.pdf` at the repo
+root with centred, unbroken tables, caption-sized takeaways and full-width
+figures, and prints the body/appendix page split.
 
 Network fetchers need the optional `data` extra and open internet; they run
 only when invoked — nothing imports them:
